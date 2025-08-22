@@ -246,156 +246,184 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            // Top controls
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Flash control
-                  GestureDetector(
-                    onTap: _toggleFlash,
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                      child: Text(
-                        _getFlashIcon(),
-                        style: const TextStyle(fontSize: 20),
+            // Camera preview (fills available space)
+            Positioned.fill(
+              child: _isInitialized && _cameraController != null
+                  ? CameraPreview(_cameraController!)
+                  : Container(
+                      color: Colors.black,
+                      child: const Center(
+                        child: CircularProgressIndicator(color: Colors.white),
                       ),
                     ),
-                  ),
-                  // Mode toggle
-                  GestureDetector(
-                    onTap: _toggleMode,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        _isPhotoMode ? 'PHOTO' : 'VIDEO',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+            ),
+
+            // Top toolbar
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 8,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        _buildTopIconButton(Icons.settings, onTap: () {}),
+                        const SizedBox(width: 8),
+                        _buildTopIconButton(Icons.flash_on, onTap: _toggleFlash),
+                        const SizedBox(width: 8),
+                        _buildTopIconButton(Icons.timer, onTap: () {}),
+                      ],
                     ),
-                  ),
-                  // Switch camera
-                  GestureDetector(
-                    onTap: _switchCamera,
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                      child: const Icon(
-                        Icons.flip_camera_ios,
-                        color: Colors.white,
-                        size: 24,
-                      ),
+                    Row(
+                      children: [
+                        _buildTopIconButton(Icons.crop_7_5, onTap: () {}),
+                        const SizedBox(width: 8),
+                        _buildTopIconButton(Icons.photo_size_select_actual, onTap: () {}),
+                      ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 
-            // Camera preview
-            Expanded(
-              child: _isInitialized && _cameraController != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: CameraPreview(_cameraController!),
-                    )
-                  : const Center(
-                      child: CircularProgressIndicator(color: Colors.white),
-                    ),
-            ),
+            // (center hint removed as requested)
 
-            // Bottom controls
-            Container(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  // Last captured preview
-                  GestureDetector(
-                    onTap: _showLastCaptured,
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      child: _lastCapturedPath != null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.file(
-                                File(_lastCapturedPath!),
-                                fit: BoxFit.cover,
-                              ),
-                            )
-                          : const Icon(
-                              Icons.photo_library,
-                              color: Colors.white,
-                              size: 24,
+            // Bottom control panel
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Color(0xFF111111),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+                ),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Mode labels
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildModeLabel('PORTRAIT', false),
+                        const SizedBox(width: 12),
+                        _buildModeLabel('PHOTO', _isPhotoMode),
+                        const SizedBox(width: 12),
+                        _buildModeLabel('VIDEO', !_isPhotoMode),
+                        const SizedBox(width: 12),
+                        _buildModeLabel('MORE', false),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Controls row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Last captured thumbnail
+                        GestureDetector(
+                          onTap: _showLastCaptured,
+                          child: Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.white24, width: 1.5),
                             ),
-                    ),
-                  ),
-
-                  // Capture button
-                  GestureDetector(
-                    onTap: _isPhotoMode
-                        ? _capturePhoto
-                        : _isRecording
-                            ? _stopVideoRecording
-                            : _startVideoRecording,
-                    child: Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: _isPhotoMode
-                            ? Colors.white
-                            : _isRecording
-                                ? Colors.red
-                                : Colors.red.withValues(alpha: 0.8),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white,
-                          width: 4,
+                            child: _lastCapturedPath != null
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.file(
+                                      File(_lastCapturedPath!),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  )
+                                : const Icon(Icons.photo_library, color: Colors.white54),
+                          ),
                         ),
-                      ),
-                      child: _isRecording
-                          ? const Icon(
-                              Icons.stop,
-                              color: Colors.white,
-                              size: 32,
-                            )
-                          : Icon(
-                              _isPhotoMode ? Icons.camera_alt : Icons.videocam,
-                              color: _isPhotoMode ? Colors.black : Colors.white,
-                              size: 32,
-                            ),
-                    ),
-                  ),
 
-                  // Placeholder for symmetry
-                  const SizedBox(width: 50),
-                ],
+                        // Shutter
+                        GestureDetector(
+                          onTap: _isPhotoMode
+                              ? _capturePhoto
+                              : _isRecording
+                                  ? _stopVideoRecording
+                                  : _startVideoRecording,
+                          child: Container(
+                            width: 78,
+                            height: 78,
+                            decoration: BoxDecoration(
+                              color: _isPhotoMode ? Colors.white : Colors.red,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white70, width: 3),
+                            ),
+                            child: Center(
+                              child: _isRecording
+                                  ? const Icon(Icons.stop, color: Colors.white, size: 30)
+                                  : Icon(
+                                      _isPhotoMode ? Icons.camera_alt : Icons.videocam,
+                                      color: _isPhotoMode ? Colors.black : Colors.white,
+                                      size: 30,
+                                    ),
+                            ),
+                          ),
+                        ),
+
+                        // Switch camera
+                        GestureDetector(
+                          onTap: _switchCamera,
+                          child: Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.cameraswitch, color: Colors.white70),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTopIconButton(IconData icon, {required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.45),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: Colors.white70, size: 20),
+      ),
+    );
+  }
+
+  Widget _buildModeLabel(String text, bool selected) {
+    return AnimatedDefaultTextStyle(
+      duration: const Duration(milliseconds: 200),
+      style: TextStyle(
+        color: selected ? Colors.white : Colors.white54,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+        letterSpacing: 1.2,
+      ),
+      child: Text(text),
     );
   }
 }
