@@ -334,7 +334,11 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.sync_alt, color: _harmoniser ? Colors.white : Colors.white70, size: 18),
+                                  ImageIcon(
+                                    AssetImage('assets/icons/harmonizer.png'),
+                                    color: _harmoniser ? Colors.white : Colors.white70,
+                                    size: 18,
+                                  ),
                                   const SizedBox(width: 8),
                                   Text(
                                     'Harmoniser',
@@ -364,7 +368,11 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.block, color: _privacyMode ? Colors.white : Colors.white70, size: 18),
+                                  ImageIcon(
+                                    AssetImage('assets/icons/privacy.png'),
+                                    color: _privacyMode ? Colors.white : Colors.white70,
+                                    size: 18,
+                                  ),
                                   const SizedBox(width: 8),
                                   Text(
                                     'Privacy',
