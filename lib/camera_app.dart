@@ -21,6 +21,8 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
   bool _isPhotoMode = true;
   FlashMode _flashMode = FlashMode.off;
   bool _isInitialized = false;
+  bool _privacyMode = false;
+  bool _harmoniser = false;
   String? _lastCapturedPath;
   VideoPlayerController? _videoPlayerController;
 
@@ -307,6 +309,74 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Control buttons row: Harmoniser (left) and Privacy (right)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Harmoniser button (left)
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _harmoniser = !_harmoniser;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(_harmoniser ? 'Harmoniser ON' : 'Harmoniser OFF')),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: _harmoniser ? Colors.teal : Colors.grey.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.sync_alt, color: _harmoniser ? Colors.white : Colors.white70, size: 18),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Harmoniser',
+                                    style: TextStyle(color: _harmoniser ? Colors.white : Colors.white54),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          // Privacy button (right)
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _privacyMode = !_privacyMode;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(_privacyMode ? 'Privacy Mode ON' : 'Privacy Mode OFF')),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: _privacyMode ? Colors.deepPurple : Colors.grey.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.block, color: _privacyMode ? Colors.white : Colors.white70, size: 18),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Privacy',
+                                    style: TextStyle(color: _privacyMode ? Colors.white : Colors.white54),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     // Mode labels
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
