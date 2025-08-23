@@ -13,7 +13,7 @@ class CameraApp extends StatefulWidget {
   State<CameraApp> createState() => _CameraAppState();
 }
 
-class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
+class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   CameraController? _cameraController;
   List<CameraDescription> _cameras = [];
   int _selectedCameraIndex = 0;
@@ -23,6 +23,8 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
   bool _isInitialized = false;
   bool _privacyMode = false;
   bool _harmoniser = false;
+  bool _harmoniserMinimized = false;
+  bool _privacyMinimized = false;
   String? _lastCapturedPath;
   VideoPlayerController? _videoPlayerController;
 
@@ -230,16 +232,16 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
     );
   }
 
-  String _getFlashIcon() {
+  IconData _flashIconData() {
     switch (_flashMode) {
-      case FlashMode.off:
-        return '💡';
       case FlashMode.auto:
-        return '⚡';
+        return Icons.flash_auto;
       case FlashMode.always:
-        return '🔆';
+        return Icons.flash_on;
       case FlashMode.torch:
-        return '🔦';
+        return Icons.highlight;
+      case FlashMode.off:
+        return Icons.flash_off;
     }
   }
 
@@ -276,7 +278,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                       children: [
                         _buildTopIconButton(Icons.settings, onTap: () {}),
                         const SizedBox(width: 8),
-                        _buildTopIconButton(Icons.flash_on, onTap: _toggleFlash),
+                        _buildTopIconButton(_flashIconData(), onTap: _toggleFlash),
                         const SizedBox(width: 8),
                         _buildTopIconButton(Icons.timer, onTap: () {}),
                       ],
@@ -319,11 +321,19 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                           GestureDetector(
                             onTap: () {
                               setState(() {
-                                _harmoniser = !_harmoniser;
+                                final newVal = !_harmoniser;
+                                _harmoniser = newVal;
+                                if (newVal) {
+                                  // enable harmoniser, disable privacy and minimize its label
+                                  _privacyMode = false;
+                                  _privacyMinimized = true;
+                                  _harmoniserMinimized = false;
+                                } else {
+                                  // disabled harmoniser -> restore privacy label
+                                  _privacyMinimized = false;
+                                  _harmoniserMinimized = false;
+                                }
                               });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(_harmoniser ? 'Harmoniser ON' : 'Harmoniser OFF')),
-                              );
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -340,9 +350,16 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                                     size: 18,
                                   ),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    'Harmoniser',
-                                    style: TextStyle(color: _harmoniser ? Colors.white : Colors.white54),
+                                  // animated label
+                                  AnimatedSize(
+                                    duration: const Duration(milliseconds: 250),
+                                    curve: Curves.easeInOut,
+                                    child: _harmoniserMinimized
+                                        ? const SizedBox.shrink()
+                                        : Text(
+                                            'Harmoniser',
+                                            style: TextStyle(color: _harmoniser ? Colors.white : Colors.white54),
+                                          ),
                                   ),
                                 ],
                               ),
@@ -353,11 +370,19 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                           GestureDetector(
                             onTap: () {
                               setState(() {
-                                _privacyMode = !_privacyMode;
+                                final newVal = !_privacyMode;
+                                _privacyMode = newVal;
+                                if (newVal) {
+                                  // enable privacy, disable harmoniser and minimize its label
+                                  _harmoniser = false;
+                                  _harmoniserMinimized = true;
+                                  _privacyMinimized = false;
+                                } else {
+                                  // privacy disabled -> restore harmoniser label
+                                  _harmoniserMinimized = false;
+                                  _privacyMinimized = false;
+                                }
                               });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(_privacyMode ? 'Privacy Mode ON' : 'Privacy Mode OFF')),
-                              );
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -374,9 +399,15 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                                     size: 18,
                                   ),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    'Privacy',
-                                    style: TextStyle(color: _privacyMode ? Colors.white : Colors.white54),
+                                  AnimatedSize(
+                                    duration: const Duration(milliseconds: 250),
+                                    curve: Curves.easeInOut,
+                                    child: _privacyMinimized
+                                        ? const SizedBox.shrink()
+                                        : Text(
+                                            'Privacy',
+                                            style: TextStyle(color: _privacyMode ? Colors.white : Colors.white54),
+                                          ),
                                   ),
                                 ],
                               ),
