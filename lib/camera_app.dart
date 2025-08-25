@@ -7,8 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:path/path.dart' as path;
 import 'package:gal/gal.dart';
 import 'package:video_player/video_player.dart';
-import 'package:flutter/services.dart'; 
-
+import 'package:flutter/services.dart';
 
 class CameraApp extends StatefulWidget {
   const CameraApp({super.key});
@@ -18,6 +17,20 @@ class CameraApp extends StatefulWidget {
 }
 
 class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  // Fields are already declared below, so remove these duplicates.
+
+  IconData _flashIconData() {
+    switch (_flashMode) {
+      case FlashMode.off:
+        return Icons.flash_off;
+      case FlashMode.auto:
+        return Icons.flash_auto;
+      case FlashMode.always:
+        return Icons.flash_on;
+      case FlashMode.torch:
+        return Icons.highlight;
+    }
+  }
   CameraController? _cameraController;
   List<CameraDescription> _cameras = [];
   int _selectedCameraIndex = 0;
