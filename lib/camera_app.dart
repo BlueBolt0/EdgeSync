@@ -42,6 +42,8 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
   
   static const int MAX_FACES_TO_PROCESS = 6;
 
+  bool _smileCaptureEnabled = true;
+
 
   @override
 void initState() {
@@ -180,7 +182,7 @@ void dispose() {
 }
 
   Future<void> _processLatestImage() async {
-    if (_latestImage == null || _isDetecting) return;
+  if (_latestImage == null || _isDetecting || !_smileCaptureEnabled) return;
 
     _isDetecting = true;
 
@@ -475,7 +477,7 @@ void dispose() {
                 ),
               ),
               
-            // Top toolbar
+            // Top toolbar with smile capture toggle
             Positioned(
               left: 0,
               right: 0,
@@ -496,6 +498,16 @@ void dispose() {
                         _buildTopIconButton(
                           _isOldDevice ? Icons.speed : Icons.speed_outlined, 
                           onTap: _togglePerformanceMode
+                        ),
+                        const SizedBox(width: 16),
+                        _buildTopIconButton(
+                          _smileCaptureEnabled ? Icons.emoji_emotions : Icons.emoji_emotions_outlined,
+                          onTap: () {
+                            setState(() {
+                              _smileCaptureEnabled = !_smileCaptureEnabled;
+                            });
+                          },
+                          color: _smileCaptureEnabled ? Colors.yellow : Colors.white,
                         ),
                       ],
                     ),
@@ -621,7 +633,7 @@ void dispose() {
     );
   }
 
-  Widget _buildTopIconButton(IconData icon, {required VoidCallback onTap}) {
+  Widget _buildTopIconButton(IconData icon, {required VoidCallback onTap, Color color = Colors.white70}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -630,7 +642,7 @@ void dispose() {
           color: Colors.black.withOpacity(0.45),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, color: Colors.white70, size: 20),
+        child: Icon(icon, color: color, size: 20),
       ),
     );
   }

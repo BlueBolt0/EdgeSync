@@ -38,6 +38,8 @@ class _SmileCaptureState extends State<SmileCapture> {
   
   static const int MAX_FACES_TO_PROCESS = 6;
 
+  bool _smileCaptureEnabled = true;
+
   @override
   void initState() {
     super.initState();
@@ -100,7 +102,7 @@ class _SmileCaptureState extends State<SmileCapture> {
   }
 
   Future<void> _processLatestImage() async {
-    if (_latestImage == null || _isDetecting) return;
+  if (_latestImage == null || _isDetecting || !_smileCaptureEnabled) return;
 
     _isDetecting = true;
 
@@ -240,6 +242,23 @@ class _SmileCaptureState extends State<SmileCapture> {
     return Stack(
       children: [
         CameraPreview(widget.cameraController),
+        Positioned(
+          top: 20,
+          right: 20,
+          child: Row(
+            children: [
+              const Text('Smile Capture'),
+              Switch(
+                value: _smileCaptureEnabled,
+                onChanged: (val) {
+                  setState(() {
+                    _smileCaptureEnabled = val;
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
         if (_countdown > 0)
           Positioned(
             top: 50,
