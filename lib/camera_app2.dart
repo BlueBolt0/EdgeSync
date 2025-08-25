@@ -7,7 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:path/path.dart' as path;
 import 'package:gal/gal.dart';
 import 'package:video_player/video_player.dart';
-import 'package:flutter/services.dart'; 
+import 'dart:typed_data'; 
 
 
 class CameraApp extends StatefulWidget {
@@ -17,7 +17,7 @@ class CameraApp extends StatefulWidget {
   State<CameraApp> createState() => _CameraAppState();
 }
 
-class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
   CameraController? _cameraController;
   List<CameraDescription> _cameras = [];
   int _selectedCameraIndex = 0;
@@ -25,45 +25,26 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
   bool _isPhotoMode = true;
   FlashMode _flashMode = FlashMode.off;
   bool _isInitialized = false;
-  bool _privacyMode = false;
-  bool _harmoniser = false;
-  bool _harmoniserMinimized = false;
-  bool _privacyMinimized = false;
   String? _lastCapturedPath;
   VideoPlayerController? _videoPlayerController;
   late FaceDetector _faceDetector;
   bool _isDetecting = false;
-  int _countdown = 0;
+  int _countdown =0;
   Timer? _timer;
-  Timer? _processingTimer;
   int _photoIndex = 1;
-  CameraImage? _latestImage;
-  
-  bool _isOldDevice = false;
-  Duration _processInterval = const Duration(milliseconds: 1500);
-  static const Duration kOldDeviceInterval = Duration(milliseconds: 1500);
-  static const Duration kNewDeviceInterval = Duration(milliseconds: 500);
-  
-  static const int MAX_FACES_TO_PROCESS = 6;
-
-  bool _smileCaptureEnabled = true;
 
 
   @override
 void initState() {
   super.initState();
   WidgetsBinding.instance.addObserver(this);
-  _detectDevicePerformance();
   _initializeCamera();
   
   _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
-      enableClassification: true, // Keep smile detection
-      enableLandmarks: false,     // Disable to save processing
-      enableContours: false,      // Disable to save processing
-      enableTracking: false,      // Disable to save processing
-      minFaceSize: 0.3,          // Only detect larger faces (less processing)
-      performanceMode: FaceDetectorMode.fast, // Use fast mode for older devices
+      enableClassification: true,
+      performanceMode: FaceDetectorMode.fast,
+      minFaceSize: 0.1,
     ),
   );
 }
@@ -75,7 +56,6 @@ void dispose() {
   _videoPlayerController?.dispose();
   _faceDetector.close(); // Dispose ML Kit face detector
   _timer?.cancel();      // Cancel any active countdown
-  _processingTimer?.cancel(); // Cancel processing timer
   super.dispose();
 }
 
@@ -90,36 +70,6 @@ void dispose() {
     } else if (state == AppLifecycleState.resumed) {
       _initializeCamera();
     }
-  }
-
-  void _detectDevicePerformance() {
-    if (Platform.isAndroid) {
-      try {
-        _isOldDevice = _isLikelyOldDevice();
-        _processInterval = _isOldDevice ? kOldDeviceInterval : kNewDeviceInterval;
-        
-        print('Device performance detected: ${_isOldDevice ? "Old" : "New"} device');
-        print('Processing interval set to: ${_processInterval.inMilliseconds}ms');
-      } catch (e) {
-        _isOldDevice = true;
-        _processInterval = kOldDeviceInterval;
-        print('Device detection failed, using conservative settings: $e');
-      }
-    } else {
-      _isOldDevice = false;
-      _processInterval = kNewDeviceInterval;
-    }
-  }
-
-  bool _isLikelyOldDevice() {
-    final stopwatch = Stopwatch()..start();
-    var result = 0;
-    for (int i = 0; i < 100000; i++) {
-      result += i * 2;
-    }
-    stopwatch.stop();
-    if (result < 0) print('Unexpected result');
-    return stopwatch.elapsedMilliseconds > 5;
   }
 
   Future<void> _initializeCamera() async {
@@ -145,113 +95,86 @@ void dispose() {
   Future<void> _setupCameraController() async {
   if (_cameras.isEmpty) return;
 
-  final formats = [ImageFormatGroup.nv21, ImageFormatGroup.yuv420];
-  
-  for (final format in formats) {
-    try {
-      _cameraController = CameraController(
-        _cameras[_selectedCameraIndex],
-        ResolutionPreset.medium,
-        enableAudio: true,
-        imageFormatGroup: format,
-      );
+  _cameraController = CameraController(
+    _cameras[_selectedCameraIndex],
+    ResolutionPreset.high,
+    enableAudio: true,
+  );
 
-      await _cameraController!.initialize();
-      await _cameraController!.setFlashMode(_flashMode);
+  try {
+    await _cameraController!.initialize();
+    await _cameraController!.setFlashMode(_flashMode);
 
-      setState(() {
-        _isInitialized = true;
-      });
+    setState(() {
+      _isInitialized = true;
+    });
 
-      _cameraController?.startImageStream((cameraImage) async {
-        _latestImage = cameraImage;
-      });
+    // START FACE DETECTION IMAGE STREAM
+    _cameraController?.startImageStream((cameraImage) async {
+      if (_isDetecting || _countdown > 0) return;
+      _isDetecting = true;
 
-      _processingTimer = Timer.periodic(_processInterval, (timer) {
-        if (_latestImage != null && !_isDetecting && _countdown == 0) {
-          _processLatestImage();
-        }
-      });
+      try {
+        // Use YUV_420_888 directly
+        final inputImage = InputImage.fromBytes(
+          bytes: cameraImage.planes[0].bytes,
+          metadata: InputImageMetadata(
+            size: Size(cameraImage.width.toDouble(), cameraImage.height.toDouble()),
+            rotation: InputImageRotation.rotation0deg,
+            format: InputImageFormat.yuv420,
+            bytesPerRow: cameraImage.planes[0].bytesPerRow,
+          ),
+        );
 
-      return;
-      
-    } catch (e) {
-      _cameraController?.dispose();
-      _cameraController = null;
-    }
-  }
-  
-  // If we get here, all formats failed
-  _showErrorDialog('Camera initialization failed with all image formats');
-}
-
-  Future<void> _processLatestImage() async {
-  if (_latestImage == null || _isDetecting || !_smileCaptureEnabled) return;
-
-    _isDetecting = true;
-
-    try {
-      final inputImage = _createInputImage(_latestImage!);
-      if (inputImage != null) {
         final faces = await _faceDetector.processImage(inputImage);
 
         if (faces.isNotEmpty) {
-          final limitedFaces = faces.take(MAX_FACES_TO_PROCESS).toList();
-          
-          int smilingCount = limitedFaces
+          // Check if at least 50% of faces are smiling
+          int smilingCount = faces
               .where((face) => face.smilingProbability != null && face.smilingProbability! >= 0.2)
               .length;
 
-          if (smilingCount / limitedFaces.length >= 0.5) {
+          if (smilingCount / faces.length >= 0.5) {
             _startCountdown();
           }
         }
-      }
-    } catch (e) {
-    }
-
-    _isDetecting = false;
-  }
-
-  InputImage? _createInputImage(CameraImage image) {
-    try {
-      final camera = _cameraController!.description;
-      
-      // Determine rotation based on camera
-      InputImageRotation rotation;
-      if (camera.lensDirection == CameraLensDirection.front) {
-        rotation = InputImageRotation.rotation270deg;
-      } else {
-        rotation = InputImageRotation.rotation90deg;
+      } catch (e) {
+        // silently ignore individual frame errors
       }
 
-      // Create input image metadata
-      final inputImageData = InputImageMetadata(
-        size: Size(image.width.toDouble(), image.height.toDouble()),
-        rotation: rotation,
-        format: _getInputImageFormat(image.format),
-        bytesPerRow: image.planes[0].bytesPerRow,
-      );
-
-      // Create InputImage from camera image
-      return InputImage.fromBytes(
-        bytes: image.planes[0].bytes,
-        metadata: inputImageData,
-      );
-    } catch (e) {
-      return null;
-    }
+      _isDetecting = false;
+    });
+  } catch (e) {
+    _showErrorDialog('Error setting up camera: $e');
   }
+}
 
-  InputImageFormat _getInputImageFormat(ImageFormat format) {
-    switch (format.group) {
-      case ImageFormatGroup.nv21:
-        return InputImageFormat.nv21;
-      case ImageFormatGroup.yuv420:
-        return InputImageFormat.yuv420;
-      default:
-        return InputImageFormat.yuv420;
+
+  /// Converts CameraImage in YUV_420_888 format to NV21 byte array
+  Uint8List _convertYUV420ToNV21(CameraImage image) {
+    final int width = image.width;
+    final int height = image.height;
+
+    final Uint8List yPlane = image.planes[0].bytes;
+    final Uint8List uPlane = image.planes[1].bytes;
+    final Uint8List vPlane = image.planes[2].bytes;
+
+    final Uint8List nv21 = Uint8List(width * height + width * height ~/ 2);
+
+    // Copy Y plane
+    int offset = 0;
+    for (int i = 0; i < height; i++) {
+      nv21.setRange(offset, offset + width, yPlane, i * image.planes[0].bytesPerRow);
+      offset += width;
     }
+
+    // Interleave V and U (NV21 expects VU order)
+    for (int i = 0; i < uPlane.length; i++) {
+      nv21[offset++] = vPlane[i];
+      nv21[offset++] = uPlane[i];
+    }
+
+    return nv21;
   }
 
 
@@ -282,9 +205,6 @@ void dispose() {
       _isInitialized = false;
     });
 
-    // Stop processing timer and image stream
-    _processingTimer?.cancel();
-    await _cameraController?.stopImageStream().catchError((_) {});
     await _cameraController?.dispose();
 
     _selectedCameraIndex = (_selectedCameraIndex + 1) % _cameras.length;
@@ -318,35 +238,6 @@ void dispose() {
     } catch (e) {
       _showErrorDialog('Error changing flash mode: $e');
     }
-  }
-
-  void _togglePerformanceMode() {
-    setState(() {
-      _isOldDevice = !_isOldDevice;
-      _processInterval = _isOldDevice ? kOldDeviceInterval : kNewDeviceInterval;
-      
-      // Restart the processing timer with new interval
-      _processingTimer?.cancel();
-      _processingTimer = Timer.periodic(_processInterval, (timer) {
-        if (_latestImage != null && !_isDetecting && _countdown == 0) {
-          _processLatestImage();
-        }
-      });
-    });
-    
-    // Show feedback to user
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _isOldDevice 
-            ? 'Performance Mode: Old Device (${kOldDeviceInterval.inMilliseconds}ms)' 
-            : 'Performance Mode: New Device (${kNewDeviceInterval.inMilliseconds}ms)',
-          style: const TextStyle(color: Colors.white),
-        ),
-        backgroundColor: _isOldDevice ? Colors.orange : Colors.green,
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   Future<void> _capturePhoto() async {
@@ -411,6 +302,12 @@ void dispose() {
     }
   }
 
+  void _toggleMode() {
+    setState(() {
+      _isPhotoMode = !_isPhotoMode;
+    });
+  }
+
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
@@ -436,6 +333,19 @@ void dispose() {
         builder: (context) => MediaPreviewScreen(filePath: _lastCapturedPath!),
       ),
     );
+  }
+
+  String _getFlashIcon() {
+    switch (_flashMode) {
+      case FlashMode.off:
+        return '💡';
+      case FlashMode.auto:
+        return '⚡';
+      case FlashMode.always:
+        return '🔆';
+      case FlashMode.torch:
+        return '🔦';
+    }
   }
 
   @override
@@ -481,7 +391,7 @@ void dispose() {
                 ),
               ),
               
-            // Top toolbar with smile capture toggle
+            // Top toolbar
             Positioned(
               left: 0,
               right: 0,
@@ -495,24 +405,9 @@ void dispose() {
                       children: [
                         _buildTopIconButton(Icons.settings, onTap: () {}),
                         const SizedBox(width: 8),
-                        _buildTopIconButton(_flashIconData(), onTap: _toggleFlash),
+                        _buildTopIconButton(Icons.flash_on, onTap: _toggleFlash),
                         const SizedBox(width: 8),
                         _buildTopIconButton(Icons.timer, onTap: () {}),
-                        const SizedBox(width: 8),
-                        _buildTopIconButton(
-                          _isOldDevice ? Icons.speed : Icons.speed_outlined, 
-                          onTap: _togglePerformanceMode
-                        ),
-                        const SizedBox(width: 16),
-                        _buildTopIconButton(
-                          _smileCaptureEnabled ? Icons.emoji_emotions : Icons.emoji_emotions_outlined,
-                          onTap: () {
-                            setState(() {
-                              _smileCaptureEnabled = !_smileCaptureEnabled;
-                            });
-                          },
-                          color: _smileCaptureEnabled ? Colors.yellow : Colors.white,
-                        ),
                       ],
                     ),
                     Row(
@@ -543,111 +438,6 @@ void dispose() {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Control buttons row: Harmoniser (left) and Privacy (right)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // Harmoniser button (left)
-                          GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                final newVal = !_harmoniser;
-                                _harmoniser = newVal;
-                                if (newVal) {
-                                  // enable harmoniser, disable privacy and minimize its label
-                                  _privacyMode = false;
-                                  _privacyMinimized = true;
-                                  _harmoniserMinimized = false;
-                                } else {
-                                  // disabled harmoniser -> restore privacy label
-                                  _privacyMinimized = false;
-                                  _harmoniserMinimized = false;
-                                }
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: _harmoniser ? Colors.teal : Colors.grey.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ImageIcon(
-                                    AssetImage('assets/icons/harmonizer.png'),
-                                    color: _harmoniser ? Colors.white : Colors.white70,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  // animated label
-                                  AnimatedSize(
-                                    duration: const Duration(milliseconds: 250),
-                                    curve: Curves.easeInOut,
-                                    child: _harmoniserMinimized
-                                        ? const SizedBox.shrink()
-                                        : Text(
-                                            'Harmoniser',
-                                            style: TextStyle(color: _harmoniser ? Colors.white : Colors.white54),
-                                          ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-
-                          // Privacy button (right)
-                          GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                final newVal = !_privacyMode;
-                                _privacyMode = newVal;
-                                if (newVal) {
-                                  // enable privacy, disable harmoniser and minimize its label
-                                  _harmoniser = false;
-                                  _harmoniserMinimized = true;
-                                  _privacyMinimized = false;
-                                } else {
-                                  // privacy disabled -> restore harmoniser label
-                                  _harmoniserMinimized = false;
-                                  _privacyMinimized = false;
-                                }
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: _privacyMode ? Colors.deepPurple : Colors.grey.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ImageIcon(
-                                    AssetImage('assets/icons/privacy.png'),
-                                    color: _privacyMode ? Colors.white : Colors.white70,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  AnimatedSize(
-                                    duration: const Duration(milliseconds: 250),
-                                    curve: Curves.easeInOut,
-                                    child: _privacyMinimized
-                                        ? const SizedBox.shrink()
-                                        : Text(
-                                            'Privacy',
-                                            style: TextStyle(color: _privacyMode ? Colors.white : Colors.white54),
-                                          ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                     // Mode labels
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -742,7 +532,7 @@ void dispose() {
     );
   }
 
-  Widget _buildTopIconButton(IconData icon, {required VoidCallback onTap, Color color = Colors.white70}) {
+  Widget _buildTopIconButton(IconData icon, {required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -751,7 +541,7 @@ void dispose() {
           color: Colors.black.withOpacity(0.45),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, color: color, size: 20),
+        child: Icon(icon, color: Colors.white70, size: 20),
       ),
     );
   }
