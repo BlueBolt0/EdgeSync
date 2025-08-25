@@ -7,7 +7,9 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:path/path.dart' as path;
 import 'package:gal/gal.dart';
 import 'package:video_player/video_player.dart';
-import 'package:flutter/services.dart'; 
+
+import 'package:flutter/services.dart';
+import 'package:vosk_flutter/vosk_flutter.dart';
 
 
 class CameraApp extends StatefulWidget {
@@ -18,6 +20,11 @@ class CameraApp extends StatefulWidget {
 }
 
 class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
+  // Vosk speech recognition
+  VoskModel? _voskModel;
+  SpeechService? _speechService;
+  bool _isListening = false;
+  String _lastVoiceCommand = '';
   CameraController? _cameraController;
   List<CameraDescription> _cameras = [];
   int _selectedCameraIndex = 0;
@@ -53,6 +60,59 @@ void initState() {
   _initializeCamera();
   
   _faceDetector = FaceDetector(
+  _initVosk();
+  Future<void> _initVosk() async {
+    try {
+      // Make sure you have downloaded a Vosk model and placed it in assets/vosk_models/model-folder
+      // For example: assets/vosk_models/vosk-model-small-en-us-0.15
+      await VoskFlutter.init();
+      _voskModel = await VoskModel.create('assets/vosk_models/vosk-model-small-en-us-0.15');
+      _speechService = SpeechService(_voskModel!);
+      setState(() {});
+    } catch (e) {
+      print('Vosk init error: $e');
+    }
+  }
+  void _toggleListening() async {
+    if (_speechService == null) return;
+    if (_isListening) {
+      await _speechService!.stop();
+      setState(() => _isListening = false);
+    } else {
+      await _speechService!.start(
+        onResult: (result) {
+          setState(() {
+            _lastVoiceCommand = result.text;
+          });
+          _handleVoiceCommand(result.text);
+        },
+        onPartial: (partial) {},
+        onError: (err) {
+          print('Vosk error: $err');
+        },
+      );
+      setState(() => _isListening = true);
+    }
+  }
+
+  void _handleVoiceCommand(String command) {
+    final cmd = command.toLowerCase();
+    if (cmd.contains('photo') || cmd.contains('capture')) {
+      _capturePhoto();
+    } else if (cmd.contains('video') && cmd.contains('start')) {
+      _startVideoRecording();
+    } else if (cmd.contains('video') && cmd.contains('stop')) {
+      _stopVideoRecording();
+    } else if (cmd.contains('switch')) {
+      _switchCamera();
+    } else if (cmd.contains('smile')) {
+      setState(() => _smileCaptureEnabled = !_smileCaptureEnabled);
+    }
+    // Add more commands as needed
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Voice: $command')),
+    );
+  }
     options: FaceDetectorOptions(
       enableClassification: true, // Keep smile detection
       enableLandmarks: false,     // Disable to save processing
@@ -476,7 +536,7 @@ void dispose() {
                   ),
                 ),
               ),
-              
+
             // Top toolbar with smile capture toggle
             Positioned(
               left: 0,
@@ -523,7 +583,16 @@ void dispose() {
               ),
             ),
 
-            // (center hint removed as requested)
+            // Voice command floating button
+            Positioned(
+              right: 24,
+              bottom: 120,
+              child: FloatingActionButton(
+                backgroundColor: _isListening ? Colors.red : Colors.blue,
+                onPressed: _toggleListening,
+                child: Icon(_isListening ? Icons.mic : Icons.mic_none, color: Colors.white),
+              ),
+            ),
 
             // Bottom control panel
             Positioned(
