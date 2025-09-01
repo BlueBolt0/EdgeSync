@@ -8,6 +8,7 @@ import 'package:path/path.dart' as path;
 import 'package:gal/gal.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter/services.dart';
+import 'noise_injection/android_noise_injector.dart';
 
 class CameraApp extends StatefulWidget {
   const CameraApp({super.key});
@@ -68,6 +69,7 @@ void initState() {
   WidgetsBinding.instance.addObserver(this);
   _detectDevicePerformance();
   _initializeCamera();
+  _initializeNoiseInjector();
   
   _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
@@ -133,6 +135,15 @@ void dispose() {
     stopwatch.stop();
     if (result < 0) print('Unexpected result');
     return stopwatch.elapsedMilliseconds > 5;
+  }
+
+  Future<void> _initializeNoiseInjector() async {
+    try {
+      await AndroidOptimizedNoiseInjector.init();
+      print('✅ Noise injector initialized');
+    } catch (e) {
+      print('❌ Failed to initialize noise injector: $e');
+    }
   }
 
   Future<void> _initializeCamera() async {
@@ -362,6 +373,53 @@ void dispose() {
     );
   }
 
+  Future<void> _applyNoiseToLastPhoto() async {
+    if (_lastCapturedPath == null) {
+      _showErrorDialog('No photo to apply noise to');
+      return;
+    }
+
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🎨 Applying AI-powered noise injection...'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+
+      // Read the image file
+      final imageFile = File(_lastCapturedPath!);
+      final imageBytes = await imageFile.readAsBytes();
+
+      final result = await AndroidOptimizedNoiseInjector.injectNoise(
+        imageBytes: imageBytes,
+        filename: 'noised_${DateTime.now().millisecondsSinceEpoch}',
+        useEnsemble: true,
+      );
+
+      if (result != null && result['success'] == true) {
+        setState(() {
+          _lastCapturedPath = result['outputPath'];
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Noise applied successfully!'),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'View',
+              onPressed: () => _showLastCaptured(),
+            ),
+          ),
+        );
+      } else {
+        _showErrorDialog('Failed to apply noise: ${result?['error'] ?? 'Unknown error'}');
+      }
+    } catch (e) {
+      _showErrorDialog('Error applying noise: $e');
+    }
+  }
+
   Future<void> _capturePhoto() async {
     if (_cameraController == null || !_cameraController!.value.isInitialized) {
       return;
@@ -515,6 +573,11 @@ void dispose() {
                         _buildTopIconButton(
                           _isOldDevice ? Icons.speed : Icons.speed_outlined, 
                           onTap: _togglePerformanceMode
+                        ),
+                        const SizedBox(width: 8),
+                        _buildTopIconButton(
+                          Icons.auto_fix_high, 
+                          onTap: _applyNoiseToLastPhoto
                         ),
                         const SizedBox(width: 16),
                         _buildTopIconButton(
