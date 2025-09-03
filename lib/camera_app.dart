@@ -8,6 +8,10 @@ import 'package:path/path.dart' as path;
 import 'package:gal/gal.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter/services.dart';
+import 'services/harmonizer_service.dart';
+import 'widgets/harmonizer_dialog.dart';
+import 'screens/harmonizer_settings_screen.dart';
+import 'widgets/ui_components.dart';
 
 class CameraApp extends StatefulWidget {
   const CameraApp({super.key});
@@ -45,6 +49,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
   String? _lastCapturedPath;
   VideoPlayerController? _videoPlayerController;
   late FaceDetector _faceDetector;
+  late HarmonizerService _harmonizerService;
   bool _isDetecting = false;
   int _countdown = 0;
   Timer? _timer;
@@ -79,6 +84,8 @@ void initState() {
       performanceMode: FaceDetectorMode.fast, // Use fast mode for older devices
     ),
   );
+  
+  _harmonizerService = HarmonizerService();
 }
 
 @override
@@ -87,6 +94,7 @@ void dispose() {
   _cameraController?.dispose();
   _videoPlayerController?.dispose();
   _faceDetector.close(); // Dispose ML Kit face detector
+  _harmonizerService.dispose(); // Dispose harmonizer service
   _timer?.cancel();      // Cancel any active countdown
   _processingTimer?.cancel(); // Cancel processing timer
   super.dispose();
@@ -379,10 +387,35 @@ void dispose() {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Photo saved to gallery!')),
         );
+
+        // If harmonizer is enabled, show the harmonizer dialog
+        if (_harmoniser) {
+          _showHarmonizerDialog(photo.path);
+        }
       }
     } catch (e) {
       _showErrorDialog('Error capturing photo: $e');
     }
+  }
+
+  void _showHarmonizerDialog(String imagePath) {
+    // Ensure any existing dialog is dismissed first
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    
+    // Small delay to ensure proper cleanup
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (context) => HarmonizerDialog(
+            key: ValueKey('harmonizer_${DateTime.now().millisecondsSinceEpoch}'),
+            imagePath: imagePath,
+            harmonizerService: _harmonizerService,
+          ),
+        );
+      }
+    });
   }
 
   Future<void> _startVideoRecording() async {
@@ -471,28 +504,7 @@ void dispose() {
             ),
             // COUNTDOWN OVERLAY
             if (_countdown > 0)
-              Center(
-                child: AnimatedScale(
-                  scale: 1.2, // initial scale
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOutBack,
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.5),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text(
-                      '$_countdown',
-                      style: const TextStyle(
-                        fontSize: 72,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+              AnimatedCountdownWidget(countdown: _countdown),
               
             // Top toolbar with smile capture toggle
             Positioned(
@@ -506,7 +518,14 @@ void dispose() {
                   children: [
                     Row(
                       children: [
-                        _buildTopIconButton(Icons.settings, onTap: () {}),
+                        _buildTopIconButton(Icons.settings, onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const HarmonizerSettingsScreen(),
+                            ),
+                          );
+                        }),
                         const SizedBox(width: 8),
                         _buildTopIconButton(_flashIconData(), onTap: _toggleFlash),
                         const SizedBox(width: 8),
@@ -563,7 +582,9 @@ void dispose() {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           // Harmoniser button (left)
-                          GestureDetector(
+                          HarmonizerButton(
+                            isActive: _harmoniser,
+                            isMinimized: _harmoniserMinimized,
                             onTap: () {
                               setState(() {
                                 final newVal = !_harmoniser;
@@ -580,39 +601,12 @@ void dispose() {
                                 }
                               });
                             },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: _harmoniser ? Colors.teal : Colors.grey.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ImageIcon(
-                                    AssetImage('assets/icons/harmonizer.png'),
-                                    color: _harmoniser ? Colors.white : Colors.white70,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  // animated label
-                                  AnimatedSize(
-                                    duration: const Duration(milliseconds: 250),
-                                    curve: Curves.easeInOut,
-                                    child: _harmoniserMinimized
-                                        ? const SizedBox.shrink()
-                                        : Text(
-                                            'Harmoniser',
-                                            style: TextStyle(color: _harmoniser ? Colors.white : Colors.white54),
-                                          ),
-                                  ),
-                                ],
-                              ),
-                            ),
                           ),
 
                           // Privacy button (right)
-                          GestureDetector(
+                          PrivacyButton(
+                            isActive: _privacyMode,
+                            isMinimized: _privacyMinimized,
                             onTap: () {
                               setState(() {
                                 final newVal = !_privacyMode;
@@ -629,34 +623,6 @@ void dispose() {
                                 }
                               });
                             },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: _privacyMode ? Colors.deepPurple : Colors.grey.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ImageIcon(
-                                    AssetImage('assets/icons/privacy.png'),
-                                    color: _privacyMode ? Colors.white : Colors.white70,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  AnimatedSize(
-                                    duration: const Duration(milliseconds: 250),
-                                    curve: Curves.easeInOut,
-                                    child: _privacyMinimized
-                                        ? const SizedBox.shrink()
-                                        : Text(
-                                            'Privacy',
-                                            style: TextStyle(color: _privacyMode ? Colors.white : Colors.white54),
-                                          ),
-                                  ),
-                                ],
-                              ),
-                            ),
                           ),
                         ],
                       ),
