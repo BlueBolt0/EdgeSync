@@ -7,6 +7,8 @@ import 'dart:async';
 void main() => runApp(OptimizedFaceApp());
 
 class OptimizedFaceApp extends StatelessWidget {
+  const OptimizedFaceApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -17,6 +19,8 @@ class OptimizedFaceApp extends StatelessWidget {
 }
 
 class OptimizedFaceScreen extends StatefulWidget {
+  const OptimizedFaceScreen({super.key});
+
   @override
   _OptimizedFaceScreenState createState() => _OptimizedFaceScreenState();
 }

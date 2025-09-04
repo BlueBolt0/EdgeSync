@@ -35,7 +35,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
   List<CameraDescription> _cameras = [];
   int _selectedCameraIndex = 0;
   bool _isRecording = false;
-  bool _isPhotoMode = true;
+  final bool _isPhotoMode = true;
   FlashMode _flashMode = FlashMode.off;
   bool _isInitialized = false;
   bool _privacyMode = false;
