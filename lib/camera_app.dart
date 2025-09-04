@@ -9,7 +9,7 @@ import 'package:gal/gal.dart';
 import 'package:video_player/video_player.dart';
 
 import 'package:flutter/services.dart';
-import 'package:vosk_flutter/vosk_flutter.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 
 class CameraApp extends StatefulWidget {
@@ -19,10 +19,8 @@ class CameraApp extends StatefulWidget {
   State<CameraApp> createState() => _CameraAppState();
 }
 
-class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
-  // Vosk speech recognition
-  VoskModel? _voskModel;
-  SpeechService? _speechService;
+  // SpeechToText
+  late stt.SpeechToText _speech;
   bool _isListening = false;
   String _lastVoiceCommand = '';
   CameraController? _cameraController;
@@ -70,42 +68,42 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
       ),
     );
 
-    _initVosk();
+  _speech = stt.SpeechToText();
   }
 
-  Future<void> _initVosk() async {
-    try {
-      // Make sure you have downloaded a Vosk model and placed it in assets/vosk_models/model-folder
-      // For example: assets/vosk_models/vosk-model-small-en-us-0.15
-      await VoskFlutter.init();
-      _voskModel = await VoskModel.create('assets/vosk_models/vosk-model-small-en-us-0.15');
-      _speechService = SpeechService(_voskModel!);
-      setState(() {});
-    } catch (e) {
-      print('Vosk init error: $e');
-    }
-  }
+  // No longer needed
 
   void _toggleListening() async {
-    if (_speechService == null) return;
     if (_isListening) {
-      await _speechService!.stop();
+      await _speech.stop();
       setState(() => _isListening = false);
     } else {
-      await _speechService!.start(
-        onResult: (result) {
-          // VoskFlutter's onResult returns a String (the recognized text)
-          setState(() {
-            _lastVoiceCommand = result;
-          });
-          _handleVoiceCommand(result);
+      bool available = await _speech.initialize(
+        onStatus: (status) {
+          if (status == 'done' || status == 'notListening') {
+            setState(() => _isListening = false);
+          }
         },
-        onPartial: (partial) {},
-        onError: (err) {
-          print('Vosk error: $err');
+        onError: (error) {
+          print('SpeechToText error: $error');
         },
       );
-      setState(() => _isListening = true);
+      if (available) {
+        setState(() => _isListening = true);
+        _speech.listen(
+          onResult: (result) {
+            setState(() {
+              _lastVoiceCommand = result.recognizedWords;
+            });
+            _handleVoiceCommand(result.recognizedWords);
+          },
+          listenFor: const Duration(seconds: 5),
+          pauseFor: const Duration(seconds: 2),
+          localeId: 'en_US',
+          cancelOnError: true,
+          partialResults: false,
+        );
+      }
     }
   }
 
