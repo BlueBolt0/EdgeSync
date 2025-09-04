@@ -69,31 +69,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
   _speech = stt.SpeechToText();
   }
 
-  Future<void> _initVosk() async {
-    try {
-      _model = await _vosk.createModel('assets/vosk_models/vosk-model-small-en-us-0.15');
-      _speechService = await _vosk.createSpeechService(_model!);
-
-      _resultSubscription = _speechService!.onResults().listen((result) {
-        final text = result.text;
-        if (text != null && text.isNotEmpty) {
-          setState(() {
-            _lastVoiceCommand = text;
-          });
-          _handleVoiceCommand(text);
-        }
-      });
-
-       _speechService!.onListeningStateChanged().listen((isListening) {
-        if (mounted) {
-          setState(() => _isListening = isListening);
-        }
-      });
-
-    } catch (e) {
-      print('Vosk init error: $e');
-    }
-  }
+  // Vosk init removed
 
   void _toggleListening() async {
     if (_isListening) {
