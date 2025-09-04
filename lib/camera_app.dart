@@ -8,8 +8,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:path/path.dart' as path;
 import 'package:gal/gal.dart';
 import 'package:video_player/video_player.dart';
-import 'package:flutter/services.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:speech_to_text/speech_to_text.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
 
 class CameraApp extends StatefulWidget {
   const CameraApp({super.key});
@@ -19,15 +19,10 @@ class CameraApp extends StatefulWidget {
 }
 
 class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
-  // Static constants
-  static const Duration kOldDeviceInterval = Duration(milliseconds: 1500);
-  static const Duration kNewDeviceInterval = Duration(milliseconds: 500);
-  static const int MAX_FACES_TO_PROCESS = 6;
-
-  // SpeechToText
-  late stt.SpeechToText _speech;
-  bool _isListening = false;
-  String _lastVoiceCommand = '';
+  // Speech to text
+  final SpeechToText _speechToText = SpeechToText();
+  bool _speechEnabled = false;
+  String _lastWords = '';
 
   // Camera and state variables
   CameraController? _cameraController;
@@ -48,6 +43,8 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
   CameraImage? _latestImage;
 
   bool _isOldDevice = false;
+  static const Duration kOldDeviceInterval = Duration(milliseconds: 1500);
+  static const Duration kNewDeviceInterval = Duration(milliseconds: 500);
   Duration _processInterval = kNewDeviceInterval;
 
   bool _smileCaptureEnabled = true;
@@ -56,6 +53,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _initSpeech();
 
     _faceDetector = FaceDetector(
       options: FaceDetectorOptions(
@@ -66,42 +64,29 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
 
     _detectDevicePerformance();
     _initializeCamera();
-  _speech = stt.SpeechToText();
   }
 
-  // Vosk init removed
+  void _initSpeech() async {
+    _speechEnabled = await _speechToText.initialize();
+    setState(() {});
+  }
 
-  void _toggleListening() async {
-    if (_isListening) {
-      await _speech.stop();
-      setState(() => _isListening = false);
-    } else {
-      bool available = await _speech.initialize(
-        onStatus: (status) {
-          if (status == 'done' || status == 'notListening') {
-            setState(() => _isListening = false);
-          }
-        },
-        onError: (error) {
-          print('SpeechToText error: $error');
-        },
-      );
-      if (available) {
-        setState(() => _isListening = true);
-        _speech.listen(
-          onResult: (result) {
-            setState(() {
-              _lastVoiceCommand = result.recognizedWords;
-            });
-            _handleVoiceCommand(result.recognizedWords);
-          },
-          listenFor: const Duration(seconds: 5),
-          pauseFor: const Duration(seconds: 2),
-          localeId: 'en_US',
-          cancelOnError: true,
-          partialResults: false,
-        );
-      }
+  void _startListening() async {
+    await _speechToText.listen(onResult: _onSpeechResult);
+    setState(() {});
+  }
+
+  void _stopListening() async {
+    await _speechToText.stop();
+    setState(() {});
+  }
+
+  void _onSpeechResult(SpeechRecognitionResult result) {
+    setState(() {
+      _lastWords = result.recognizedWords;
+    });
+    if (result.finalResult) {
+      _handleVoiceCommand(_lastWords);
     }
   }
 
@@ -131,7 +116,6 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
     _faceDetector.close();
     _timer?.cancel();
     _processingTimer?.cancel();
-  // No longer needed
     super.dispose();
   }
 
@@ -148,7 +132,6 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
   }
 
   void _detectDevicePerformance() {
-    // Simplified: logic can be re-added if necessary
     _processInterval = kNewDeviceInterval;
   }
 
@@ -229,7 +212,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
     }
   }
 
-  InputImage? _createInputImage(CameraImage image) {
+   InputImage? _createInputImage(CameraImage image) {
     final camera = _cameras[_selectedCameraIndex];
     final rotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation) ?? InputImageRotation.rotation0deg;
     
@@ -444,14 +427,14 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                     const SizedBox(height: 16),
                     // Voice Command
                     FloatingActionButton(
-                      backgroundColor: _isListening ? Colors.red : Colors.blue,
-                      onPressed: _toggleListening,
-                      child: Icon(_isListening ? Icons.mic : Icons.mic_none, color: Colors.white),
+                      onPressed: _speechToText.isNotListening ? _startListening : _stopListening,
+                      tooltip: 'Listen',
+                      child: Icon(_speechToText.isNotListening ? Icons.mic_off : Icons.mic),
                     ),
-                    if (_lastVoiceCommand.isNotEmpty) 
+                    if (_lastWords.isNotEmpty) 
                       Padding(
                         padding: const EdgeInsets.only(top: 8.0),
-                        child: Text(_lastVoiceCommand, style: const TextStyle(color: Colors.white)),
+                        child: Text(_lastWords, style: const TextStyle(color: Colors.white)),
                       )
                   ],
                 ),
@@ -519,4 +502,3 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
     );
   }
 }
-
