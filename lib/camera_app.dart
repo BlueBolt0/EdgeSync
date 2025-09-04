@@ -760,16 +760,19 @@ class MediaPreviewScreen extends StatefulWidget {
 class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   VideoPlayerController? _videoPlayerController;
   bool _isVideo = false;
+  late final HarmonizerService _harmonizerService;
 
   @override
   void initState() {
     super.initState();
+  _harmonizerService = HarmonizerService();
     _checkFileType();
   }
 
   @override
   void dispose() {
     _videoPlayerController?.dispose();
+  _harmonizerService.dispose();
     super.dispose();
   }
 
@@ -796,6 +799,14 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
           _isVideo ? 'Video Preview' : 'Photo Preview',
           style: const TextStyle(color: Colors.white),
         ),
+        actions: [
+          if (!_isVideo)
+            IconButton(
+              tooltip: 'Harmonizer',
+              onPressed: _openHarmonizer,
+              icon: const Icon(Icons.auto_awesome, color: Colors.tealAccent),
+            ),
+        ],
       ),
       body: Center(
         child: _isVideo
@@ -836,6 +847,25 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
                 File(widget.filePath),
                 fit: BoxFit.contain,
               ),
+      ),
+      floatingActionButton: !_isVideo
+          ? FloatingActionButton.extended(
+              onPressed: _openHarmonizer,
+              backgroundColor: Colors.teal,
+              icon: const Icon(Icons.auto_awesome, color: Colors.white),
+              label: const Text('Harmonizer', style: TextStyle(color: Colors.white)),
+            )
+          : null,
+    );
+  }
+
+  void _openHarmonizer() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => HarmonizerDialog(
+        imagePath: widget.filePath,
+        harmonizerService: _harmonizerService,
       ),
     );
   }

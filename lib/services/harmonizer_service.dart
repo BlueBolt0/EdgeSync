@@ -1,9 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_contacts/flutter_contacts.dart' as fcontacts;
 import 'package:share_plus/share_plus.dart';
+import 'package:android_intent_plus/android_intent.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'llm_service.dart';
 import 'logging_service.dart';
 import 'notifications_service.dart';
@@ -69,15 +72,34 @@ class HarmonizerService {
   // Execute suggested actions
   Future<void> executeCalendarAction(CalendarEvent event) async {
     try {
-      // Create calendar event URL
-  final startDate = DateTime.parse('${event.date}T${event.time}:00');
+      final startDate = DateTime.parse('${event.date}T${event.time}:00');
       final endDate = startDate.add(const Duration(hours: 1));
-      
+
+      // Prefer native calendar insert on Android
+      if (Platform.isAndroid) {
+        // Request calendar permission if needed
+        final status = await Permission.calendar.request();
+        if (status.isGranted) {
+          final intent = AndroidIntent(
+            action: 'android.intent.action.INSERT',
+            data: 'content://com.android.calendar/events',
+            arguments: <String, dynamic>{
+              'title': event.title,
+              'description': event.description ?? '',
+              'beginTime': startDate.millisecondsSinceEpoch,
+              'endTime': endDate.millisecondsSinceEpoch,
+            },
+          );
+          await intent.launch();
+          return;
+        }
+      }
+
+      // Fallback: open Google Calendar web template
       final url = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
           '&text=${Uri.encodeComponent(event.title)}'
           '&dates=${_formatDateTime(startDate)}/${_formatDateTime(endDate)}'
           '&details=${Uri.encodeComponent(event.description ?? '')}';
-      
       if (await canLaunchUrl(Uri.parse(url))) {
         await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       }
@@ -141,9 +163,29 @@ class HarmonizerService {
   
   Future<void> executeNoteAction(NoteItem note) async {
     try {
-      // Share to Google Keep (or any notes app). On Android, user can pick Keep.
       final content = '${note.title}\n\n${note.content}';
-      await Share.share(content, subject: 'Save to Keep');
+
+      if (Platform.isAndroid) {
+        // Try direct share to Google Keep
+        try {
+          final intent = AndroidIntent(
+            action: 'android.intent.action.SEND',
+            type: 'text/plain',
+            package: 'com.google.android.keep',
+            arguments: <String, dynamic>{
+              'android.intent.extra.SUBJECT': note.title,
+              'android.intent.extra.TEXT': content,
+            },
+          );
+          await intent.launch();
+        } catch (_) {
+          // Fallback to generic share sheet
+          await Share.share(content, subject: note.title);
+        }
+      } else {
+        // Other platforms: generic share
+        await Share.share(content, subject: note.title);
+      }
 
       // Also persist to local storage for history
       final prefs = await SharedPreferences.getInstance();
