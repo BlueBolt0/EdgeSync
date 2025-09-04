@@ -9,7 +9,7 @@ import 'package:path/path.dart' as path;
 import 'package:gal/gal.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter/services.dart';
-import 'package:vosk_flutter/vosk_flutter.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 class CameraApp extends StatefulWidget {
   const CameraApp({super.key});
@@ -24,11 +24,8 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
   static const Duration kNewDeviceInterval = Duration(milliseconds: 500);
   static const int MAX_FACES_TO_PROCESS = 6;
 
-  // Vosk speech recognition
-  final VoskFlutterPlugin _vosk = VoskFlutterPlugin();
-  Model? _model;
-  SpeechService? _speechService;
-  StreamSubscription? _resultSubscription;
+  // SpeechToText
+  late stt.SpeechToText _speech;
   bool _isListening = false;
   String _lastVoiceCommand = '';
 
@@ -69,7 +66,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
 
     _detectDevicePerformance();
     _initializeCamera();
-    _initVosk();
+  _speech = stt.SpeechToText();
   }
 
   Future<void> _initVosk() async {
@@ -99,15 +96,36 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
   }
 
   void _toggleListening() async {
-    if (_speechService == null) return;
-    try {
-      if (_isListening) {
-        await _speechService!.stop();
-      } else {
-        await _speechService!.start();
+    if (_isListening) {
+      await _speech.stop();
+      setState(() => _isListening = false);
+    } else {
+      bool available = await _speech.initialize(
+        onStatus: (status) {
+          if (status == 'done' || status == 'notListening') {
+            setState(() => _isListening = false);
+          }
+        },
+        onError: (error) {
+          print('SpeechToText error: $error');
+        },
+      );
+      if (available) {
+        setState(() => _isListening = true);
+        _speech.listen(
+          onResult: (result) {
+            setState(() {
+              _lastVoiceCommand = result.recognizedWords;
+            });
+            _handleVoiceCommand(result.recognizedWords);
+          },
+          listenFor: const Duration(seconds: 5),
+          pauseFor: const Duration(seconds: 2),
+          localeId: 'en_US',
+          cancelOnError: true,
+          partialResults: false,
+        );
       }
-    } catch (e) {
-      print("Error toggling listening: $e");
     }
   }
 
@@ -137,7 +155,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
     _faceDetector.close();
     _timer?.cancel();
     _processingTimer?.cancel();
-    _resultSubscription?.cancel();
+  // No longer needed
     super.dispose();
   }
 
