@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/harmonizer_service.dart';
+import '../services/logging_service.dart';
+import 'ui_components.dart';
 
 class HarmonizerDialog extends StatefulWidget {
   final String imagePath;
@@ -17,6 +19,7 @@ class HarmonizerDialog extends StatefulWidget {
 
 class _HarmonizerDialogState extends State<HarmonizerDialog> {
   bool _isProcessing = false;
+  String _processingStep = '';
   String _extractedText = '';
   HarmonizerSuggestions? _suggestions;
   String? _error;
@@ -35,6 +38,7 @@ class _HarmonizerDialogState extends State<HarmonizerDialog> {
 
   void _resetState() {
     _isProcessing = false;
+    _processingStep = '';
     _extractedText = '';
     _suggestions = null;
     _error = null;
@@ -48,42 +52,56 @@ class _HarmonizerDialogState extends State<HarmonizerDialog> {
 
     setState(() {
       _isProcessing = true;
+      _processingStep = 'Processing OCR...';
       _error = null;
       _suggestions = null;
       _extractedText = '';
     });
 
     try {
-      print('Starting OCR for image: ${widget.imagePath}');
+      logger.info('Starting harmonizer processing for image: ${widget.imagePath}');
       
       // Extract text from image
+      setState(() {
+        _processingStep = 'Extracting text from image...';
+      });
+      
       _extractedText = await widget.harmonizerService.extractTextFromImage(widget.imagePath);
       
-      print('OCR completed. Text length: ${_extractedText.length}');
+      logger.info('OCR completed. Text length: ${_extractedText.length}');
       
       if (_extractedText.trim().isEmpty) {
         setState(() {
           _error = 'No text found in the image';
           _isProcessing = false;
+          _processingStep = '';
         });
         return;
       }
 
-      print('Starting AI analysis...');
+      setState(() {
+        _processingStep = 'Sending to AI for analysis...';
+      });
       
       // Analyze text and get suggestions
+      setState(() {
+        _processingStep = 'Parsing AI results...';
+      });
+      
       _suggestions = await widget.harmonizerService.analyzeText(_extractedText);
       
-      print('AI analysis completed. Suggestions found: ${_suggestions?.hasAnySuggestions ?? false}');
+      logger.info('AI analysis completed. Suggestions found: ${_suggestions?.hasAnySuggestions ?? false}');
       
       setState(() {
         _isProcessing = false;
+        _processingStep = '';
       });
     } catch (e) {
-      print('Error in _processImage: $e');
+      logger.error('Error in _processImage: $e', error: e);
       setState(() {
         _error = e.toString();
         _isProcessing = false;
+        _processingStep = '';
       });
     }
   }
@@ -134,7 +152,7 @@ class _HarmonizerDialogState extends State<HarmonizerDialog> {
             // Content
             Flexible(
               child: _isProcessing
-                  ? const _LoadingWidget()
+                  ? _LoadingWidget(processingStep: _processingStep)
                   : _error != null
                       ? _ErrorWidget(
                           error: _error!,
@@ -159,24 +177,27 @@ class _HarmonizerDialogState extends State<HarmonizerDialog> {
 }
 
 class _LoadingWidget extends StatelessWidget {
-  const _LoadingWidget();
+  final String processingStep;
+  
+  const _LoadingWidget({required this.processingStep});
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.all(32),
+    return Padding(
+      padding: const EdgeInsets.all(32),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(color: Colors.teal),
-          SizedBox(height: 16),
+          const CircularProgressIndicator(color: Colors.teal),
+          const SizedBox(height: 16),
           Text(
-            'Analyzing image...',
-            style: TextStyle(color: Colors.white70),
+            processingStep.isNotEmpty ? processingStep : 'Analyzing image...',
+            style: const TextStyle(color: Colors.white70),
+            textAlign: TextAlign.center,
           ),
-          SizedBox(height: 8),
-          Text(
-            'Extracting text and generating suggestions',
+          const SizedBox(height: 8),
+          const Text(
+            'This may take a few seconds...',
             style: TextStyle(color: Colors.white54, fontSize: 12),
             textAlign: TextAlign.center,
           ),
@@ -453,10 +474,29 @@ class _CalendarEventTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         dense: true,
-        title: Text(event.title, style: const TextStyle(color: Colors.white)),
-        subtitle: Text(
-          '${event.date} at ${event.time}',
-          style: const TextStyle(color: Colors.white70),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(event.title, style: const TextStyle(color: Colors.white)),
+            ),
+            ConfidenceIndicator(confidence: event.confidence),
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${event.date} at ${event.time}',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            if (event.explanation != null && event.explanation!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'AI: ${event.explanation}',
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
+          ],
         ),
         trailing: IconButton(
           onPressed: onExecute,
@@ -483,10 +523,29 @@ class _ReminderTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         dense: true,
-        title: Text(reminder.title, style: const TextStyle(color: Colors.white)),
-        subtitle: Text(
-          reminder.description,
-          style: const TextStyle(color: Colors.white70),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(reminder.title, style: const TextStyle(color: Colors.white)),
+            ),
+            ConfidenceIndicator(confidence: reminder.confidence),
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              reminder.description,
+              style: const TextStyle(color: Colors.white70),
+            ),
+            if (reminder.explanation != null && reminder.explanation!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'AI: ${reminder.explanation}',
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
+          ],
         ),
         trailing: IconButton(
           onPressed: onExecute,
@@ -513,12 +572,31 @@ class _ContactTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         dense: true,
-        title: Text(contact.name, style: const TextStyle(color: Colors.white)),
-        subtitle: Text(
-          [contact.phone, contact.email, contact.organization]
-              .where((s) => s.isNotEmpty)
-              .join(' • '),
-          style: const TextStyle(color: Colors.white70),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(contact.name, style: const TextStyle(color: Colors.white)),
+            ),
+            ConfidenceIndicator(confidence: contact.confidence),
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              [contact.phone, contact.email, contact.organization]
+                  .where((s) => s.isNotEmpty)
+                  .join(' • '),
+              style: const TextStyle(color: Colors.white70),
+            ),
+            if (contact.explanation != null && contact.explanation!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'AI: ${contact.explanation}',
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
+          ],
         ),
         trailing: IconButton(
           onPressed: onExecute,
@@ -545,12 +623,31 @@ class _NoteTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         dense: true,
-        title: Text(note.title, style: const TextStyle(color: Colors.white)),
-        subtitle: Text(
-          note.content,
-          style: const TextStyle(color: Colors.white70),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(note.title, style: const TextStyle(color: Colors.white)),
+            ),
+            ConfidenceIndicator(confidence: note.confidence),
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              note.content,
+              style: const TextStyle(color: Colors.white70),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (note.explanation != null && note.explanation!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'AI: ${note.explanation}',
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
+          ],
         ),
         trailing: IconButton(
           onPressed: onExecute,

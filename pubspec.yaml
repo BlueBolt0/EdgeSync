@@ -53,6 +53,10 @@ dependencies:
   url_launcher: ^6.2.5
   # For local storage
   shared_preferences: ^2.2.2
+  share_plus: ^7.2.1
+  flutter_contacts: ^1.1.7
+  flutter_local_notifications: ^17.2.1+2
+  timezone: ^0.9.3
 
 dev_dependencies:
   flutter_test:

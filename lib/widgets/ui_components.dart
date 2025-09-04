@@ -1,5 +1,57 @@
 import 'package:flutter/material.dart';
 
+// Confidence indicator widget
+class ConfidenceIndicator extends StatelessWidget {
+  final double confidence;
+  final bool showLabel;
+  
+  const ConfidenceIndicator({
+    super.key,
+    required this.confidence,
+    this.showLabel = true,
+  });
+  
+  @override
+  Widget build(BuildContext context) {
+    final percentage = (confidence * 100).round();
+    final color = _getConfidenceColor(confidence);
+    
+    if (!showLabel) {
+      return Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+        ),
+      );
+    }
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.5)),
+      ),
+      child: Text(
+        '$percentage%',
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+  
+  Color _getConfidenceColor(double confidence) {
+    if (confidence >= 0.8) return Colors.green;
+    if (confidence >= 0.6) return Colors.orange;
+    return Colors.red;
+  }
+}
+
 class LoadingOverlay extends StatelessWidget {
   final bool isLoading;
   final Widget child;

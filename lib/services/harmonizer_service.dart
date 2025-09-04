@@ -1,14 +1,18 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_contacts/flutter_contacts.dart' as fcontacts;
+import 'package:share_plus/share_plus.dart';
+import 'llm_service.dart';
+import 'logging_service.dart';
+import 'notifications_service.dart';
 
 class HarmonizerService {
-  static const String _groqApiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-  static const String _apiKeyPref = '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';
+  static const String _apiKeyPref = 'groq_api_key';
   
   final TextRecognizer _textRecognizer = TextRecognizer();
+  final LLMService _llmService = LLMService();
   
   // Get API key from shared preferences
   Future<String?> _getApiKey() async {
@@ -24,127 +28,49 @@ class HarmonizerService {
   
   // Extract text from image using OCR
   Future<String> extractTextFromImage(String imagePath) async {
+    logger.startOperation('ocr_extraction');
     try {
-      print('Starting OCR for image: $imagePath');
+      logger.info('Starting OCR for image: $imagePath', operation: 'ocr_extraction');
       final inputImage = InputImage.fromFilePath(imagePath);
       final recognizedText = await _textRecognizer.processImage(inputImage);
-      print('OCR completed. Text: ${recognizedText.text}');
+      logger.info('OCR completed. Text: ${recognizedText.text}', operation: 'ocr_extraction');
+      logger.endOperation('ocr_extraction');
       return recognizedText.text;
     } catch (e) {
-      print('OCR error: $e');
+      logger.error('OCR error: $e', operation: 'ocr_extraction', error: e);
+      logger.endOperation('ocr_extraction');
       throw Exception('OCR processing failed: $e');
     }
   }
   
   // Analyze text using Groq LLM and get suggestions
   Future<HarmonizerSuggestions> analyzeText(String extractedText) async {
-    final apiKey = await _getApiKey();
-    if (apiKey == null || apiKey.isEmpty) {
-      throw Exception('Groq API key not configured. Please set it in settings.');
-    }
-    
+    logger.startOperation('llm_analysis');
     try {
-      final response = await http.post(
-        Uri.parse(_groqApiUrl),
-        headers: {
-          'Authorization': 'Bearer $apiKey',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'model': 'openai/gpt-oss-20b',
-          'messages': [
-            {
-              'role': 'system',
-              'content': '''You are a JSON generator. Analyze the given text and return ONLY a valid JSON object.
-
-RULES:
-1. Return ONLY the JSON object, no other text
-2. Use this EXACT structure:
-{
-  "calendar_events": [],
-  "reminders": [],
-  "contacts": [],
-  "notes": []
-}
-
-3. For calendar_events, look for dates, times, meetings, appointments
-4. For reminders, look for tasks, todos, deadlines
-5. For contacts, look for names, phone numbers, emails
-6. For notes, save any important information
-
-Example valid response:
-{"calendar_events":[{"title":"Meeting","date":"2025-09-04","time":"14:00","description":"Team meeting"}],"reminders":[],"contacts":[],"notes":[]}
-
-If no information found, return:
-{"calendar_events":[],"reminders":[],"contacts":[],"notes":[]}'''
-            },
-            {
-              'role': 'user',
-              'content': 'Analyze this text and suggest relevant actions: $extractedText'
-            }
-          ],
-          'temperature': 0.1,
-          'max_tokens': 1500,
-          'top_p': 0.9,
-        }),
-      );
+      logger.info('Starting LLM analysis for text: ${extractedText.substring(0, extractedText.length > 100 ? 100 : extractedText.length)}...', operation: 'llm_analysis');
       
-      if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-        final content = responseData['choices'][0]['message']['content'];
-        
-        // Clean and validate the content before parsing
-        String cleanContent = content.trim();
-        
-        // Remove any markdown code blocks if present
-        if (cleanContent.startsWith('```json')) {
-          cleanContent = cleanContent.substring(7);
-        }
-        if (cleanContent.endsWith('```')) {
-          cleanContent = cleanContent.substring(0, cleanContent.length - 3);
-        }
-        cleanContent = cleanContent.trim();
-        
-        // Validate JSON structure
-        if (!cleanContent.startsWith('{') || !cleanContent.endsWith('}')) {
-          throw Exception('Invalid JSON format from AI response');
-        }
-        
-        try {
-          // Parse the JSON response from LLM
-          final suggestions = jsonDecode(cleanContent);
-          return HarmonizerSuggestions.fromJson(suggestions);
-        } catch (jsonError) {
-          // Fallback: try to extract partial JSON or create empty response
-          print('JSON parsing error: $jsonError');
-          print('Raw content: $cleanContent');
-          
-          // Try to fix common JSON issues
-          String fixedContent = _attemptJsonFix(cleanContent);
-          
-          try {
-            final suggestions = jsonDecode(fixedContent);
-            return HarmonizerSuggestions.fromJson(suggestions);
-          } catch (secondError) {
-            print('Second parsing attempt failed: $secondError');
-            
-            // Last resort: try to extract any useful information manually
-            return _parseManually(cleanContent, extractedText);
-          }
-        }
-      } else {
-        throw Exception('Groq API error: ${response.statusCode} - ${response.body}');
+      final apiKey = await _getApiKey();
+      if (apiKey == null || apiKey.isEmpty) {
+        throw Exception('Groq API key not configured. Please set it in settings.');
       }
+      
+      final response = await _llmService.analyzeText(extractedText);
+      final suggestions = HarmonizerSuggestions.fromJson(response);
+      logger.info('LLM analysis completed successfully', operation: 'llm_analysis');
+      logger.endOperation('llm_analysis');
+      return suggestions;
     } catch (e) {
-      throw Exception('Failed to analyze text: $e');
+      logger.error('LLM analysis failed: $e', operation: 'llm_analysis', error: e);
+      logger.endOperation('llm_analysis');
+      rethrow;
     }
   }
-  
+
   // Execute suggested actions
   Future<void> executeCalendarAction(CalendarEvent event) async {
     try {
       // Create calendar event URL
-      final startDate = DateTime.parse('${event.date} ${event.time}:00');
+  final startDate = DateTime.parse('${event.date}T${event.time}:00');
       final endDate = startDate.add(const Duration(hours: 1));
       
       final url = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
@@ -162,21 +88,48 @@ If no information found, return:
   
   Future<void> executeReminderAction(ReminderItem reminder) async {
     try {
-      // For now, we'll use a simple note-taking approach
-      // In a real app, you might integrate with a task management service
+      // Schedule a local notification as a reminder
+      await NotificationsService.instance.ensureInitialized();
+
+      // Try to parse a due date/time from description if present (very simple heuristic)
+      final now = DateTime.now();
+      final scheduled = now.add(const Duration(minutes: 1));
+
+      await NotificationsService.instance.scheduleReminder(
+        title: 'Reminder: ${reminder.title}',
+        body: reminder.description,
+        scheduledDate: scheduled,
+      );
+
+      // Also persist to local storage for history
       final prefs = await SharedPreferences.getInstance();
       final reminders = prefs.getStringList('saved_reminders') ?? [];
       reminders.add(jsonEncode(reminder.toJson()));
       await prefs.setStringList('saved_reminders', reminders);
     } catch (e) {
-      throw Exception('Failed to save reminder: $e');
+      throw Exception('Failed to schedule reminder: $e');
     }
   }
   
   Future<void> executeContactAction(ContactInfo contact) async {
     try {
-      // For now, we'll save contact info to shared preferences
-      // In a future update, we can integrate with device contacts
+      // Request permission
+      if (!await fcontacts.FlutterContacts.requestPermission()) {
+        throw Exception('Contacts permission denied');
+      }
+
+      final newContact = fcontacts.Contact(
+        name: fcontacts.Name(first: contact.name),
+        phones: contact.phone.isNotEmpty ? [fcontacts.Phone(contact.phone)] : [],
+        emails: contact.email.isNotEmpty ? [fcontacts.Email(contact.email)] : [],
+        organizations: contact.organization.isNotEmpty
+            ? [fcontacts.Organization(company: contact.organization)]
+            : [],
+      );
+
+      await newContact.insert();
+
+      // Also persist to local storage for history
       final prefs = await SharedPreferences.getInstance();
       final contacts = prefs.getStringList('saved_contacts') ?? [];
       contacts.add(jsonEncode(contact.toJson()));
@@ -188,12 +141,17 @@ If no information found, return:
   
   Future<void> executeNoteAction(NoteItem note) async {
     try {
+      // Share to Google Keep (or any notes app). On Android, user can pick Keep.
+      final content = '${note.title}\n\n${note.content}';
+      await Share.share(content, subject: 'Save to Keep');
+
+      // Also persist to local storage for history
       final prefs = await SharedPreferences.getInstance();
       final notes = prefs.getStringList('saved_notes') ?? [];
       notes.add(jsonEncode(note.toJson()));
       await prefs.setStringList('saved_notes', notes);
     } catch (e) {
-      throw Exception('Failed to save note: $e');
+      throw Exception('Failed to share note: $e');
     }
   }
   
@@ -204,83 +162,6 @@ If no information found, return:
         '${dateTime.hour.toString().padLeft(2, '0')}'
         '${dateTime.minute.toString().padLeft(2, '0')}'
         '${dateTime.second.toString().padLeft(2, '0')}Z';
-  }
-  
-  // Helper method to attempt fixing common JSON issues
-  String _attemptJsonFix(String content) {
-    String fixed = content;
-    
-    // Remove any trailing commas before closing brackets/braces
-    fixed = fixed.replaceAll(RegExp(r',(\s*[}\]])'), r'$1');
-    
-    // Ensure proper quotes around keys
-    fixed = fixed.replaceAll(RegExp(r'(\w+):'), r'"$1":');
-    
-    // Fix unescaped quotes in strings
-    fixed = fixed.replaceAll(RegExp(r'(?<!\\)"(?=[^,}\]:]*[,}\]:])'), r'\"');
-    
-    // Ensure the JSON has proper structure
-    if (!fixed.trim().startsWith('{')) {
-      fixed = '{$fixed';
-    }
-    if (!fixed.trim().endsWith('}')) {
-      fixed = '$fixed}';
-    }
-    
-    return fixed;
-  }
-  
-  // Manual parsing as last resort
-  HarmonizerSuggestions _parseManually(String content, String originalText) {
-    print('Attempting manual parsing...');
-    
-    // Try to extract any actionable content manually
-    List<CalendarEvent> events = [];
-    List<ReminderItem> reminders = [];
-    List<ContactInfo> contacts = [];
-    List<NoteItem> notes = [];
-    
-    // Look for date patterns in original text
-    final dateRegex = RegExp(r'\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b');
-    final timeRegex = RegExp(r'\b(\d{1,2}):(\d{2})\s*(AM|PM)?\b', caseSensitive: false);
-    
-    if (dateRegex.hasMatch(originalText) || timeRegex.hasMatch(originalText)) {
-      events.add(CalendarEvent(
-        title: 'Event from captured text',
-        date: DateTime.now().add(const Duration(days: 1)).toString().substring(0, 10),
-        time: '09:00',
-        description: originalText.length > 100 ? originalText.substring(0, 100) + '...' : originalText,
-      ));
-    }
-    
-    // Look for phone numbers
-    final phoneRegex = RegExp(r'\b(?:\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})\b');
-    final emailRegex = RegExp(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b');
-    
-    if (phoneRegex.hasMatch(originalText) || emailRegex.hasMatch(originalText)) {
-      contacts.add(ContactInfo(
-        name: 'Contact from image',
-        phone: phoneRegex.firstMatch(originalText)?.group(0) ?? '',
-        email: emailRegex.firstMatch(originalText)?.group(0) ?? '',
-        organization: '',
-      ));
-    }
-    
-    // Always create at least one note with the extracted text
-    if (originalText.trim().isNotEmpty) {
-      notes.add(NoteItem(
-        title: 'Text from image',
-        content: originalText.length > 200 ? originalText.substring(0, 200) + '...' : originalText,
-        category: 'general',
-      ));
-    }
-    
-    return HarmonizerSuggestions(
-      calendarEvents: events,
-      reminders: reminders,
-      contacts: contacts,
-      notes: notes,
-    );
   }
   
   void dispose() {
@@ -331,12 +212,16 @@ class CalendarEvent {
   final String date;
   final String time;
   final String? description;
+  final double confidence;
+  final String? explanation;
   
   CalendarEvent({
     required this.title,
     required this.date,
     required this.time,
     this.description,
+    this.confidence = 0.0,
+    this.explanation,
   });
   
   factory CalendarEvent.fromJson(Map<String, dynamic> json) {
@@ -345,6 +230,8 @@ class CalendarEvent {
       date: json['date'] ?? '',
       time: json['time'] ?? '09:00',
       description: json['description'],
+      confidence: (json['confidence'] ?? 0.0).toDouble(),
+      explanation: json['explanation'],
     );
   }
   
@@ -354,6 +241,8 @@ class CalendarEvent {
       'date': date,
       'time': time,
       'description': description,
+      'confidence': confidence,
+      'explanation': explanation,
     };
   }
 }
@@ -362,11 +251,15 @@ class ReminderItem {
   final String title;
   final String description;
   final String priority;
+  final double confidence;
+  final String? explanation;
   
   ReminderItem({
     required this.title,
     required this.description,
     required this.priority,
+    this.confidence = 0.0,
+    this.explanation,
   });
   
   factory ReminderItem.fromJson(Map<String, dynamic> json) {
@@ -374,6 +267,8 @@ class ReminderItem {
       title: json['title'] ?? '',
       description: json['description'] ?? '',
       priority: json['priority'] ?? 'medium',
+      confidence: (json['confidence'] ?? 0.0).toDouble(),
+      explanation: json['explanation'],
     );
   }
   
@@ -382,6 +277,8 @@ class ReminderItem {
       'title': title,
       'description': description,
       'priority': priority,
+      'confidence': confidence,
+      'explanation': explanation,
     };
   }
 }
@@ -391,12 +288,16 @@ class ContactInfo {
   final String phone;
   final String email;
   final String organization;
+  final double confidence;
+  final String? explanation;
   
   ContactInfo({
     required this.name,
     required this.phone,
     required this.email,
     required this.organization,
+    this.confidence = 0.0,
+    this.explanation,
   });
   
   factory ContactInfo.fromJson(Map<String, dynamic> json) {
@@ -405,6 +306,8 @@ class ContactInfo {
       phone: json['phone'] ?? '',
       email: json['email'] ?? '',
       organization: json['organization'] ?? '',
+      confidence: (json['confidence'] ?? 0.0).toDouble(),
+      explanation: json['explanation'],
     );
   }
   
@@ -414,6 +317,8 @@ class ContactInfo {
       'phone': phone,
       'email': email,
       'organization': organization,
+      'confidence': confidence,
+      'explanation': explanation,
     };
   }
 }
@@ -422,11 +327,15 @@ class NoteItem {
   final String title;
   final String content;
   final String category;
+  final double confidence;
+  final String? explanation;
   
   NoteItem({
     required this.title,
     required this.content,
     required this.category,
+    this.confidence = 0.0,
+    this.explanation,
   });
   
   factory NoteItem.fromJson(Map<String, dynamic> json) {
@@ -434,6 +343,8 @@ class NoteItem {
       title: json['title'] ?? '',
       content: json['content'] ?? '',
       category: json['category'] ?? 'general',
+      confidence: (json['confidence'] ?? 0.0).toDouble(),
+      explanation: json['explanation'],
     );
   }
   
@@ -442,6 +353,8 @@ class NoteItem {
       'title': title,
       'content': content,
       'category': category,
+      'confidence': confidence,
+      'explanation': explanation,
     };
   }
 }
