@@ -53,14 +53,26 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
 
 
   @override
-void initState() {
-  super.initState();
-  WidgetsBinding.instance.addObserver(this);
-  _detectDevicePerformance();
-  _initializeCamera();
-  
-  _faceDetector = FaceDetector(
-  _initVosk();
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _detectDevicePerformance();
+    _initializeCamera();
+
+    _faceDetector = FaceDetector(
+      options: FaceDetectorOptions(
+        enableClassification: true, // Keep smile detection
+        enableLandmarks: false,     // Disable to save processing
+        enableContours: false,      // Disable to save processing
+        enableTracking: false,      // Disable to save processing
+        minFaceSize: 0.3,          // Only detect larger faces (less processing)
+        performanceMode: FaceDetectorMode.fast, // Use fast mode for older devices
+      ),
+    );
+
+    _initVosk();
+  }
+
   Future<void> _initVosk() async {
     try {
       // Make sure you have downloaded a Vosk model and placed it in assets/vosk_models/model-folder
@@ -73,6 +85,7 @@ void initState() {
       print('Vosk init error: $e');
     }
   }
+
   void _toggleListening() async {
     if (_speechService == null) return;
     if (_isListening) {
@@ -113,12 +126,6 @@ void initState() {
       SnackBar(content: Text('Voice: $command')),
     );
   }
-    options: FaceDetectorOptions(
-      enableClassification: true, // Keep smile detection
-      enableLandmarks: false,     // Disable to save processing
-      enableContours: false,      // Disable to save processing
-      enableTracking: false,      // Disable to save processing
-      minFaceSize: 0.3,          // Only detect larger faces (less processing)
       performanceMode: FaceDetectorMode.fast, // Use fast mode for older devices
     ),
   );
