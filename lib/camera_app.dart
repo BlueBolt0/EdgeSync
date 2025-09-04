@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -8,8 +7,10 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:path/path.dart' as path;
 import 'package:gal/gal.dart';
 import 'package:video_player/video_player.dart';
+
 import 'package:flutter/services.dart';
 import 'package:vosk_flutter/vosk_flutter.dart';
+
 
 class CameraApp extends StatefulWidget {
   const CameraApp({super.key});
@@ -20,11 +21,10 @@ class CameraApp extends StatefulWidget {
 
 class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
   // Vosk speech recognition
-  Model? _voskModel;
+  VoskModel? _voskModel;
   SpeechService? _speechService;
   bool _isListening = false;
   String _lastVoiceCommand = '';
-
   CameraController? _cameraController;
   List<CameraDescription> _cameras = [];
   int _selectedCameraIndex = 0;
@@ -41,15 +41,16 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
   Timer? _processingTimer;
   int _photoIndex = 1;
   CameraImage? _latestImage;
-
+  
   bool _isOldDevice = false;
-  final Duration _processInterval = const Duration(milliseconds: 1500);
+  Duration _processInterval = const Duration(milliseconds: 1500);
   static const Duration kOldDeviceInterval = Duration(milliseconds: 1500);
   static const Duration kNewDeviceInterval = Duration(milliseconds: 500);
-
+  
   static const int MAX_FACES_TO_PROCESS = 6;
 
   bool _smileCaptureEnabled = true;
+
 
   @override
   void initState() {
@@ -57,25 +58,28 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _detectDevicePerformance();
     _initializeCamera();
-    _initVosk();
 
     _faceDetector = FaceDetector(
       options: FaceDetectorOptions(
         enableClassification: true, // Keep smile detection
-        enableLandmarks: false, // Disable to save processing
-        enableContours: false, // Disable to save processing
-        enableTracking: false, // Disable to save processing
-        minFaceSize: 0.3, // Only detect larger faces (less processing)
+        enableLandmarks: false,     // Disable to save processing
+        enableContours: false,      // Disable to save processing
+        enableTracking: false,      // Disable to save processing
+        minFaceSize: 0.3,          // Only detect larger faces (less processing)
         performanceMode: FaceDetectorMode.fast, // Use fast mode for older devices
       ),
     );
+
+    _initVosk();
   }
 
   Future<void> _initVosk() async {
     try {
-      final vosk = VoskFlutter();
-      _voskModel = await vosk.createModel('assets/vosk_models/vosk-model-small-en-us-0.15');
-      _speechService = await vosk.createSpeechService(_voskModel!);
+      // Make sure you have downloaded a Vosk model and placed it in assets/vosk_models/model-folder
+      // For example: assets/vosk_models/vosk-model-small-en-us-0.15
+      await VoskFlutter.init();
+      _voskModel = await VoskModel.create('assets/vosk_models/vosk-model-small-en-us-0.15');
+      _speechService = SpeechService(_voskModel!);
       setState(() {});
     } catch (e) {
       print('Vosk init error: $e');
@@ -88,17 +92,19 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
       await _speechService!.stop();
       setState(() => _isListening = false);
     } else {
-      try {
-        final result = await _speechService!.start();
-        if (result != null) {
-         setState(() {
-            _lastVoiceCommand = result.text ?? '';
+      await _speechService!.start(
+        onResult: (result) {
+          // VoskFlutter's onResult returns a String (the recognized text)
+          setState(() {
+            _lastVoiceCommand = result;
           });
-          _handleVoiceCommand(result.text ?? '');
-        }
-      } catch (e) {
-        print('Vosk error: $e');
-      }
+          _handleVoiceCommand(result);
+        },
+        onPartial: (partial) {},
+        onError: (err) {
+          print('Vosk error: $err');
+        },
+      );
       setState(() => _isListening = true);
     }
   }
@@ -121,17 +127,18 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
       SnackBar(content: Text('Voice: $command')),
     );
   }
+}
 
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _cameraController?.dispose();
-    _videoPlayerController?.dispose();
-    _faceDetector.close(); // Dispose ML Kit face detector
-    _timer?.cancel(); // Cancel any active countdown
-    _processingTimer?.cancel(); // Cancel processing timer
-    super.dispose();
-  }
+@override
+void dispose() {
+  WidgetsBinding.instance.removeObserver(this);
+  _cameraController?.dispose();
+  _videoPlayerController?.dispose();
+  _faceDetector.close(); // Dispose ML Kit face detector
+  _timer?.cancel();      // Cancel any active countdown
+  _processingTimer?.cancel(); // Cancel processing timer
+  super.dispose();
+}
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -150,18 +157,18 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
     if (Platform.isAndroid) {
       try {
         _isOldDevice = _isLikelyOldDevice();
-        //_processInterval = _isOldDevice ? kOldDeviceInterval : kNewDeviceInterval;
-
+        _processInterval = _isOldDevice ? kOldDeviceInterval : kNewDeviceInterval;
+        
         print('Device performance detected: ${_isOldDevice ? "Old" : "New"} device');
         print('Processing interval set to: ${_processInterval.inMilliseconds}ms');
       } catch (e) {
         _isOldDevice = true;
-        //_processInterval = kOldDeviceInterval;
+        _processInterval = kOldDeviceInterval;
         print('Device detection failed, using conservative settings: $e');
       }
     } else {
       _isOldDevice = false;
-     // _processInterval = kNewDeviceInterval;
+      _processInterval = kNewDeviceInterval;
     }
   }
 
@@ -195,50 +202,52 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
     }
   }
 
+
   Future<void> _setupCameraController() async {
-    if (_cameras.isEmpty) return;
+  if (_cameras.isEmpty) return;
 
-    final formats = [ImageFormatGroup.nv21, ImageFormatGroup.yuv420];
+  final formats = [ImageFormatGroup.nv21, ImageFormatGroup.yuv420];
+  
+  for (final format in formats) {
+    try {
+      _cameraController = CameraController(
+        _cameras[_selectedCameraIndex],
+        ResolutionPreset.medium,
+        enableAudio: true,
+        imageFormatGroup: format,
+      );
 
-    for (final format in formats) {
-      try {
-        _cameraController = CameraController(
-          _cameras[_selectedCameraIndex],
-          ResolutionPreset.medium,
-          enableAudio: true,
-          imageFormatGroup: format,
-        );
+      await _cameraController!.initialize();
+      await _cameraController!.setFlashMode(_flashMode);
 
-        await _cameraController!.initialize();
-        await _cameraController!.setFlashMode(_flashMode);
+      setState(() {
+        _isInitialized = true;
+      });
 
-        setState(() {
-          _isInitialized = true;
-        });
+      _cameraController?.startImageStream((cameraImage) async {
+        _latestImage = cameraImage;
+      });
 
-        _cameraController?.startImageStream((cameraImage) async {
-          _latestImage = cameraImage;
-        });
+      _processingTimer = Timer.periodic(_processInterval, (timer) {
+        if (_latestImage != null && !_isDetecting && _countdown == 0) {
+          _processLatestImage();
+        }
+      });
 
-        _processingTimer = Timer.periodic(_processInterval, (timer) {
-          if (_latestImage != null && !_isDetecting && _countdown == 0) {
-            _processLatestImage();
-          }
-        });
-
-        return;
-      } catch (e) {
-        _cameraController?.dispose();
-        _cameraController = null;
-      }
+      return;
+      
+    } catch (e) {
+      _cameraController?.dispose();
+      _cameraController = null;
     }
-
-    // If we get here, all formats failed
-    _showErrorDialog('Camera initialization failed with all image formats');
   }
+  
+  // If we get here, all formats failed
+  _showErrorDialog('Camera initialization failed with all image formats');
+}
 
   Future<void> _processLatestImage() async {
-    if (_latestImage == null || _isDetecting || !_smileCaptureEnabled) return;
+  if (_latestImage == null || _isDetecting || !_smileCaptureEnabled) return;
 
     _isDetecting = true;
 
@@ -249,11 +258,9 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
 
         if (faces.isNotEmpty) {
           final limitedFaces = faces.take(MAX_FACES_TO_PROCESS).toList();
-
+          
           int smilingCount = limitedFaces
-              .where((face) =>
-                  face.smilingProbability != null &&
-                  face.smilingProbability! >= 0.2)
+              .where((face) => face.smilingProbability != null && face.smilingProbability! >= 0.2)
               .length;
 
           if (smilingCount / limitedFaces.length >= 0.5) {
@@ -262,7 +269,6 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
         }
       }
     } catch (e) {
-      //
     }
 
     _isDetecting = false;
@@ -271,7 +277,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
   InputImage? _createInputImage(CameraImage image) {
     try {
       final camera = _cameraController!.description;
-
+      
       // Determine rotation based on camera
       InputImageRotation rotation;
       if (camera.lensDirection == CameraLensDirection.front) {
@@ -309,25 +315,26 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
     }
   }
 
+
   void _startCountdown() {
-    if (_countdown > 0 || _photoIndex > 4) return; // max 4 photos
+  if (_countdown > 0 || _photoIndex > 4) return; // max 4 photos
 
+  setState(() {
+    _countdown = 3; // 3-second timer
+  });
+
+  _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
     setState(() {
-      _countdown = 3; // 3-second timer
+      _countdown--;
     });
 
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
-      setState(() {
-        _countdown--;
-      });
-
-      if (_countdown == 0) {
-        timer.cancel();
-        await _capturePhoto(); // capture the photo when countdown ends
-        _photoIndex++; // increment photo counter
-      }
-    });
-  }
+    if (_countdown == 0) {
+      timer.cancel();
+      await _capturePhoto(); // capture the photo when countdown ends
+      _photoIndex++;         // increment photo counter
+    }
+  });
+}
 
   Future<void> _switchCamera() async {
     if (_cameras.length < 2) return;
@@ -377,8 +384,8 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
   void _togglePerformanceMode() {
     setState(() {
       _isOldDevice = !_isOldDevice;
-      //_processInterval = _isOldDevice ? kOldDeviceInterval : kNewDeviceInterval;
-
+      _processInterval = _isOldDevice ? kOldDeviceInterval : kNewDeviceInterval;
+      
       // Restart the processing timer with new interval
       _processingTimer?.cancel();
       _processingTimer = Timer.periodic(_processInterval, (timer) {
@@ -387,14 +394,14 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
         }
       });
     });
-
+    
     // Show feedback to user
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          _isOldDevice
-              ? 'Performance Mode: Old Device (${kOldDeviceInterval.inMilliseconds}ms)'
-              : 'Performance Mode: New Device (${kNewDeviceInterval.inMilliseconds}ms)',
+          _isOldDevice 
+            ? 'Performance Mode: Old Device (${kOldDeviceInterval.inMilliseconds}ms)' 
+            : 'Performance Mode: New Device (${kNewDeviceInterval.inMilliseconds}ms)',
           style: const TextStyle(color: Colors.white),
         ),
         backgroundColor: _isOldDevice ? Colors.orange : Colors.green,
@@ -411,7 +418,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
     try {
       final XFile photo = await _cameraController!.takePicture();
       await Gal.putImage(photo.path);
-
+      
       setState(() {
         _lastCapturedPath = photo.path;
       });
@@ -449,7 +456,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
     try {
       final XFile video = await _cameraController!.stopVideoRecording();
       await Gal.putVideo(video.path);
-
+      
       setState(() {
         _isRecording = false;
         _lastCapturedPath = video.path;
@@ -487,8 +494,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            MediaPreviewScreen(filePath: _lastCapturedPath!),
+        builder: (context) => MediaPreviewScreen(filePath: _lastCapturedPath!),
       ),
     );
   }
@@ -507,8 +513,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                   : Container(
                       color: Colors.black,
                       child: const Center(
-                        child:
-                            CircularProgressIndicator(color: Colors.white),
+                        child: CircularProgressIndicator(color: Colors.white),
                       ),
                     ),
             ),
@@ -551,30 +556,23 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                       children: [
                         _buildTopIconButton(Icons.settings, onTap: () {}),
                         const SizedBox(width: 8),
-                        _buildTopIconButton(Icons.flash_on,
-                            onTap: _toggleFlash),
+                        _buildTopIconButton(Icons.flash_on, onTap: _toggleFlash),
                         const SizedBox(width: 8),
                         _buildTopIconButton(Icons.timer, onTap: () {}),
                         const SizedBox(width: 8),
                         _buildTopIconButton(
-                            _isOldDevice
-                                ? Icons.speed
-                                : Icons.speed_outlined,
-                            onTap: _togglePerformanceMode),
+                          _isOldDevice ? Icons.speed : Icons.speed_outlined, 
+                          onTap: _togglePerformanceMode
+                        ),
                         const SizedBox(width: 16),
                         _buildTopIconButton(
-                          _smileCaptureEnabled
-                              ? Icons.emoji_emotions
-                              : Icons.emoji_emotions_outlined,
+                          _smileCaptureEnabled ? Icons.emoji_emotions : Icons.emoji_emotions_outlined,
                           onTap: () {
                             setState(() {
-                              _smileCaptureEnabled =
-                                  !_smileCaptureEnabled;
+                              _smileCaptureEnabled = !_smileCaptureEnabled;
                             });
                           },
-                          color: _smileCaptureEnabled
-                              ? Colors.yellow
-                              : Colors.white,
+                          color: _smileCaptureEnabled ? Colors.yellow : Colors.white,
                         ),
                       ],
                     ),
@@ -582,8 +580,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                       children: [
                         _buildTopIconButton(Icons.crop_7_5, onTap: () {}),
                         const SizedBox(width: 8),
-                        _buildTopIconButton(Icons.photo_size_select_actual,
-                            onTap: () {}),
+                        _buildTopIconButton(Icons.photo_size_select_actual, onTap: () {}),
                       ],
                     ),
                   ],
@@ -598,8 +595,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
               child: FloatingActionButton(
                 backgroundColor: _isListening ? Colors.red : Colors.blue,
                 onPressed: _toggleListening,
-                child: Icon(_isListening ? Icons.mic : Icons.mic_none,
-                    color: Colors.white),
+                child: Icon(_isListening ? Icons.mic : Icons.mic_none, color: Colors.white),
               ),
             ),
 
@@ -611,11 +607,9 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
               child: Container(
                 decoration: const BoxDecoration(
                   color: Color(0xFF111111),
-                  borderRadius:
-                      BorderRadius.vertical(top: Radius.circular(18)),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
                 ),
-                padding:
-                    const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -647,20 +641,17 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                             decoration: BoxDecoration(
                               color: Colors.grey.withOpacity(0.15),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                  color: Colors.white24, width: 1.5),
+                              border: Border.all(color: Colors.white24, width: 1.5),
                             ),
                             child: _lastCapturedPath != null
                                 ? ClipRRect(
-                                    borderRadius:
-                                        BorderRadius.circular(8),
+                                    borderRadius: BorderRadius.circular(8),
                                     child: Image.file(
                                       File(_lastCapturedPath!),
                                       fit: BoxFit.cover,
                                     ),
                                   )
-                                : const Icon(Icons.photo_library,
-                                    color: Colors.white54),
+                                : const Icon(Icons.photo_library, color: Colors.white54),
                           ),
                         ),
 
@@ -675,24 +666,16 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                             width: 78,
                             height: 78,
                             decoration: BoxDecoration(
-                              color: _isPhotoMode
-                                  ? Colors.white
-                                  : Colors.red,
+                              color: _isPhotoMode ? Colors.white : Colors.red,
                               shape: BoxShape.circle,
-                              border: Border.all(
-                                  color: Colors.white70, width: 3),
+                              border: Border.all(color: Colors.white70, width: 3),
                             ),
                             child: Center(
                               child: _isRecording
-                                  ? const Icon(Icons.stop,
-                                      color: Colors.white, size: 30)
+                                  ? const Icon(Icons.stop, color: Colors.white, size: 30)
                                   : Icon(
-                                      _isPhotoMode
-                                          ? Icons.camera_alt
-                                          : Icons.videocam,
-                                      color: _isPhotoMode
-                                          ? Colors.black
-                                          : Colors.white,
+                                      _isPhotoMode ? Icons.camera_alt : Icons.videocam,
+                                      color: _isPhotoMode ? Colors.black : Colors.white,
                                       size: 30,
                                     ),
                             ),
@@ -707,11 +690,9 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                             height: 52,
                             decoration: BoxDecoration(
                               color: Colors.grey.withOpacity(0.12),
-                              borderRadius:
-                                  BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                            child: const Icon(Icons.cameraswitch,
-                                color: Colors.white70),
+                            child: const Icon(Icons.cameraswitch, color: Colors.white70),
                           ),
                         ),
                       ],
@@ -726,8 +707,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildTopIconButton(IconData icon,
-      {required VoidCallback onTap, Color color = Colors.white70}) {
+  Widget _buildTopIconButton(IconData icon, {required VoidCallback onTap, Color color = Colors.white70}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -781,15 +761,13 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
 
   void _checkFileType() {
     final extension = path.extension(widget.filePath).toLowerCase();
-    _isVideo =
-        extension == '.mp4' || extension == '.mov' || extension == '.avi';
-
+    _isVideo = extension == '.mp4' || extension == '.mov' || extension == '.avi';
+    
     if (_isVideo) {
-      _videoPlayerController =
-          VideoPlayerController.file(File(widget.filePath))
-            ..initialize().then((_) {
-              setState(() {});
-            });
+      _videoPlayerController = VideoPlayerController.file(File(widget.filePath))
+        ..initialize().then((_) {
+          setState(() {});
+        });
     }
   }
 
@@ -807,14 +785,12 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
       ),
       body: Center(
         child: _isVideo
-            ? _videoPlayerController != null &&
-                    _videoPlayerController!.value.isInitialized
+            ? _videoPlayerController != null && _videoPlayerController!.value.isInitialized
                 ? Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       AspectRatio(
-                        aspectRatio:
-                            _videoPlayerController!.value.aspectRatio,
+                        aspectRatio: _videoPlayerController!.value.aspectRatio,
                         child: VideoPlayer(_videoPlayerController!),
                       ),
                       const SizedBox(height: 20),
