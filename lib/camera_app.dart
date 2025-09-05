@@ -51,6 +51,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
   Timer? _processingTimer;
   int _photoIndex = 1;
   CameraImage? _latestImage;
+  bool _isStreamingImages = false;
   
   bool _isOldDevice = false;
   Duration _processInterval = const Duration(milliseconds: 1500);
@@ -60,6 +61,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
   static const int MAX_FACES_TO_PROCESS = 6;
 
   bool _smileCaptureEnabled = true;
+  bool _isPortraitMode = false;
 
 
   @override
@@ -176,15 +178,9 @@ void dispose() {
         _isInitialized = true;
       });
 
-      _cameraController?.startImageStream((cameraImage) async {
-        _latestImage = cameraImage;
-      });
+  await _startImageStreamIfNeeded();
 
-      _processingTimer = Timer.periodic(_processInterval, (timer) {
-        if (_latestImage != null && !_isDetecting && _countdown == 0) {
-          _processLatestImage();
-        }
-      });
+  _startProcessingTimer();
 
       return;
       
@@ -197,6 +193,50 @@ void dispose() {
   // If we get here, all formats failed
   _showErrorDialog('Camera initialization failed with all image formats');
 }
+
+  Future<void> _startImageStreamIfNeeded() async {
+    if (_cameraController == null) return;
+    if (_isStreamingImages) return;
+    try {
+      await _cameraController!.startImageStream((cameraImage) async {
+        _latestImage = cameraImage;
+      });
+      _isStreamingImages = true;
+    } catch (_) {
+      // ignore if already streaming or not supported
+    }
+  }
+
+  Future<void> _stopImageStreamIfActive() async {
+    if (_cameraController == null) return;
+    if (!_isStreamingImages) return;
+    try {
+      await _cameraController!.stopImageStream();
+    } catch (_) {
+      // ignore
+    } finally {
+      _isStreamingImages = false;
+      _latestImage = null;
+    }
+  }
+
+  void _startProcessingTimer() {
+    _processingTimer?.cancel();
+    _processingTimer = Timer.periodic(_processInterval, (timer) {
+      if (_latestImage != null && !_isDetecting && _countdown == 0) {
+        _processLatestImage();
+      }
+    });
+  }
+
+  void _stopProcessingTimer() {
+    _processingTimer?.cancel();
+    _processingTimer = null;
+  }
+
+
+
+
 
   Future<void> _processLatestImage() async {
   if (_latestImage == null || _isDetecting || !_smileCaptureEnabled) return;
@@ -296,8 +336,8 @@ void dispose() {
     });
 
     // Stop processing timer and image stream
-    _processingTimer?.cancel();
-    await _cameraController?.stopImageStream().catchError((_) {});
+  _stopProcessingTimer();
+  await _stopImageStreamIfActive();
     await _cameraController?.dispose();
 
     _selectedCameraIndex = (_selectedCameraIndex + 1) % _cameras.length;
@@ -461,7 +501,10 @@ void dispose() {
             // Camera preview (fills available space)
             Positioned.fill(
               child: _isInitialized && _cameraController != null
-                  ? CameraPreview(_cameraController!)
+                  ? IgnorePointer(
+                      ignoring: true,
+                      child: CameraPreview(_cameraController!),
+                    )
                   : Container(
                       color: Colors.black,
                       child: const Center(
@@ -558,6 +601,11 @@ void dispose() {
                   children: [
                     // Control buttons row: Harmoniser (left) and Privacy (right)
                     Padding(
+
+
+
+
+                      
                       padding: const EdgeInsets.only(bottom: 8.0),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -662,17 +710,118 @@ void dispose() {
                       ),
                     ),
                     // Mode labels
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildModeLabel('PORTRAIT', false),
-                        const SizedBox(width: 12),
-                        _buildModeLabel('PHOTO', _isPhotoMode),
-                        const SizedBox(width: 12),
-                        _buildModeLabel('VIDEO', !_isPhotoMode),
-                        const SizedBox(width: 12),
-                        _buildModeLabel('MORE', false),
-                      ],
+                    Container(
+                      color: Colors.white10,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              print('PORTRAIT tapped - immediate response');
+                              setState(() {
+                                _isPhotoMode = false;
+                                _isPortraitMode = true;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('PORTRAIT MODE ACTIVATED'),
+                                  duration: Duration(seconds: 1),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: _isPortraitMode ? Colors.blue : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: _isPortraitMode ? Colors.blue : Colors.white30,
+                                  width: 2,
+                                ),
+                              ),
+                              child: Text(
+                                'PORTRAIT',
+                                style: TextStyle(
+                                  color: _isPortraitMode ? Colors.white : Colors.white70,
+                                  fontWeight: _isPortraitMode ? FontWeight.bold : FontWeight.normal,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () {
+                              print('PHOTO tapped - immediate response');
+                              setState(() {
+                                _isPhotoMode = true;
+                                _isPortraitMode = false;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('PHOTO MODE ACTIVATED'),
+                                  duration: Duration(seconds: 1),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: _isPhotoMode ? Colors.blue : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: _isPhotoMode ? Colors.blue : Colors.white30,
+                                  width: 2,
+                                ),
+                              ),
+                              child: Text(
+                                'PHOTO',
+                                style: TextStyle(
+                                  color: _isPhotoMode ? Colors.white : Colors.white70,
+                                  fontWeight: _isPhotoMode ? FontWeight.bold : FontWeight.normal,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () {
+                              print('VIDEO tapped - immediate response');
+                              setState(() {
+                                _isPhotoMode = false;
+                                _isPortraitMode = false;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('VIDEO MODE ACTIVATED'),
+                                  duration: Duration(seconds: 1),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: (!_isPhotoMode && !_isPortraitMode) ? Colors.blue : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: (!_isPhotoMode && !_isPortraitMode) ? Colors.blue : Colors.white30,
+                                  width: 2,
+                                ),
+                              ),
+                              child: Text(
+                                'VIDEO',
+                                style: TextStyle(
+                                  color: (!_isPhotoMode && !_isPortraitMode) ? Colors.white : Colors.white70,
+                                  fontWeight: (!_isPhotoMode && !_isPortraitMode) ? FontWeight.bold : FontWeight.normal,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 12),
 
@@ -705,16 +854,20 @@ void dispose() {
 
                         // Shutter
                         GestureDetector(
-                          onTap: _isPhotoMode
-                              ? _capturePhoto
-                              : _isRecording
-                                  ? _stopVideoRecording
-                                  : _startVideoRecording,
+                          onTap: () {
+                            if (_isRecording) {
+                              _stopVideoRecording();
+                            } else if (_isPhotoMode || _isPortraitMode) {
+                              _capturePhoto();
+                            } else {
+                              _startVideoRecording();
+                            }
+                          },
                           child: Container(
                             width: 78,
                             height: 78,
                             decoration: BoxDecoration(
-                              color: _isPhotoMode ? Colors.white : Colors.red,
+                              color: (_isPhotoMode || _isPortraitMode) ? Colors.white : Colors.red,
                               shape: BoxShape.circle,
                               border: Border.all(color: Colors.white70, width: 3),
                             ),
@@ -722,8 +875,8 @@ void dispose() {
                               child: _isRecording
                                   ? const Icon(Icons.stop, color: Colors.white, size: 30)
                                   : Icon(
-                                      _isPhotoMode ? Icons.camera_alt : Icons.videocam,
-                                      color: _isPhotoMode ? Colors.black : Colors.white,
+                                      (_isPhotoMode || _isPortraitMode) ? Icons.camera_alt : Icons.videocam,
+                                      color: (_isPhotoMode || _isPortraitMode) ? Colors.black : Colors.white,
                                       size: 30,
                                     ),
                             ),
@@ -769,17 +922,7 @@ void dispose() {
     );
   }
 
-  Widget _buildModeLabel(String text, bool selected) {
-    return AnimatedDefaultTextStyle(
-      duration: const Duration(milliseconds: 200),
-      style: TextStyle(
-        color: selected ? Colors.white : Colors.white54,
-        fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-        letterSpacing: 1.2,
-      ),
-      child: Text(text),
-    );
-  }
+
 }
 
 class MediaPreviewScreen extends StatefulWidget {
