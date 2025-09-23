@@ -408,43 +408,38 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
               left: 0,
               right: 0,
               top: 8,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        _buildTopIconButton(Icons.settings, onTap: () {}),
-                        const SizedBox(width: 8),
-                        _buildTopIconButton(_flashIconData(), onTap: _toggleFlash),
-                        const SizedBox(width: 8),
-                        _buildTopIconButton(Icons.timer, onTap: () {}),
-                        const SizedBox(width: 8),
-                        _buildTopIconButton(
-                          _isOldDevice ? Icons.speed : Icons.speed_outlined, 
-                          onTap: _togglePerformanceMode
-                        ),
-                        const SizedBox(width: 16),
-                        _buildTopIconButton(
-                          _smileCaptureEnabled ? Icons.emoji_emotions : Icons.emoji_emotions_outlined,
-                          onTap: () {
-                            setState(() {
-                              _smileCaptureEnabled = !_smileCaptureEnabled;
-                            });
-                          },
-                          color: _smileCaptureEnabled ? Colors.yellow : Colors.white,
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        _buildTopIconButton(Icons.crop_7_5, onTap: () {}),
-                        const SizedBox(width: 8),
-                        _buildTopIconButton(Icons.photo_size_select_actual, onTap: () {}),
-                      ],
-                    ),
-                  ],
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      _buildTopIconButton(Icons.settings, onTap: () {}),
+                      const SizedBox(width: 8),
+                      _buildTopIconButton(_flashIconData(), onTap: _toggleFlash),
+                      const SizedBox(width: 8),
+                      _buildTopIconButton(Icons.timer, onTap: () {}),
+                      const SizedBox(width: 8),
+                      _buildTopIconButton(
+                        _isOldDevice ? Icons.speed : Icons.speed_outlined, 
+                        onTap: _togglePerformanceMode
+                      ),
+                      const SizedBox(width: 16),
+                      _buildTopIconButton(
+                        _smileCaptureEnabled ? Icons.emoji_emotions : Icons.emoji_emotions_outlined,
+                        onTap: () {
+                          setState(() {
+                            _smileCaptureEnabled = !_smileCaptureEnabled;
+                          });
+                        },
+                        color: _smileCaptureEnabled ? Colors.yellow : Colors.white,
+                      ),
+                      const SizedBox(width: 16),
+                      _buildTopIconButton(Icons.crop_7_5, onTap: () {}),
+                      const SizedBox(width: 8),
+                      _buildTopIconButton(Icons.photo_size_select_actual, onTap: () {}),
+                    ],
+                  ),
                 ),
               ),
             ),
