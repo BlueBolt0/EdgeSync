@@ -10,6 +10,7 @@ import 'package:gal/gal.dart';
 import 'package:video_player/video_player.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:flutter/services.dart';
 
 class CameraApp extends StatefulWidget {
   const CameraApp({super.key});
@@ -18,13 +19,23 @@ class CameraApp extends StatefulWidget {
   State<CameraApp> createState() => _CameraAppState();
 }
 
-class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
-  // Speech to text
+class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  // Fields are already declared below, so remove these duplicates.
   final SpeechToText _speechToText = SpeechToText();
   bool _speechEnabled = false;
   String _lastWords = '';
-
-  // Camera and state variables
+  IconData _flashIconData() {
+    switch (_flashMode) {
+      case FlashMode.off:
+        return Icons.flash_off;
+      case FlashMode.auto:
+        return Icons.flash_auto;
+      case FlashMode.always:
+        return Icons.flash_on;
+      case FlashMode.torch:
+        return Icons.highlight;
+    }
+  }
   CameraController? _cameraController;
   List<CameraDescription> _cameras = [];
   int _selectedCameraIndex = 0;
@@ -32,6 +43,10 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
   bool _isPhotoMode = true;
   FlashMode _flashMode = FlashMode.off;
   bool _isInitialized = false;
+  bool _privacyMode = false;
+  bool _harmoniser = false;
+  bool _harmoniserMinimized = false;
+  bool _privacyMinimized = false;
   String? _lastCapturedPath;
   VideoPlayerController? _videoPlayerController;
   late FaceDetector _faceDetector;
@@ -381,6 +396,48 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                   ),
                 ],
               )
+              left: 0,
+              right: 0,
+              top: 8,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        _buildTopIconButton(Icons.settings, onTap: () {}),
+                        const SizedBox(width: 8),
+                        _buildTopIconButton(_flashIconData(), onTap: _toggleFlash),
+                        const SizedBox(width: 8),
+                        _buildTopIconButton(Icons.timer, onTap: () {}),
+                        const SizedBox(width: 8),
+                        _buildTopIconButton(
+                          _isOldDevice ? Icons.speed : Icons.speed_outlined, 
+                          onTap: _togglePerformanceMode
+                        ),
+                        const SizedBox(width: 16),
+                        _buildTopIconButton(
+                          _smileCaptureEnabled ? Icons.emoji_emotions : Icons.emoji_emotions_outlined,
+                          onTap: () {
+                            setState(() {
+                              _smileCaptureEnabled = !_smileCaptureEnabled;
+                            });
+                          },
+                          color: _smileCaptureEnabled ? Colors.yellow : Colors.white,
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        _buildTopIconButton(Icons.crop_7_5, onTap: () {}),
+                        const SizedBox(width: 8),
+                        _buildTopIconButton(Icons.photo_size_select_actual, onTap: () {}),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
             
             Positioned(
@@ -393,8 +450,114 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    // Control buttons row: Harmoniser (left) and Privacy (right)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Harmoniser button (left)
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                final newVal = !_harmoniser;
+                                _harmoniser = newVal;
+                                if (newVal) {
+                                  // enable harmoniser, disable privacy and minimize its label
+                                  _privacyMode = false;
+                                  _privacyMinimized = true;
+                                  _harmoniserMinimized = false;
+                                } else {
+                                  // disabled harmoniser -> restore privacy label
+                                  _privacyMinimized = false;
+                                  _harmoniserMinimized = false;
+                                }
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: _harmoniser ? Colors.teal : Colors.grey.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ImageIcon(
+                                    AssetImage('assets/icons/harmonizer.png'),
+                                    color: _harmoniser ? Colors.white : Colors.white70,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // animated label
+                                  AnimatedSize(
+                                    duration: const Duration(milliseconds: 250),
+                                    curve: Curves.easeInOut,
+                                    child: _harmoniserMinimized
+                                        ? const SizedBox.shrink()
+                                        : Text(
+                                            'Harmoniser',
+                                            style: TextStyle(color: _harmoniser ? Colors.white : Colors.white54),
+                                          ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          // Privacy button (right)
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                final newVal = !_privacyMode;
+                                _privacyMode = newVal;
+                                if (newVal) {
+                                  // enable privacy, disable harmoniser and minimize its label
+                                  _harmoniser = false;
+                                  _harmoniserMinimized = true;
+                                  _privacyMinimized = false;
+                                } else {
+                                  // privacy disabled -> restore harmoniser label
+                                  _harmoniserMinimized = false;
+                                  _privacyMinimized = false;
+                                }
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: _privacyMode ? Colors.deepPurple : Colors.grey.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ImageIcon(
+                                    AssetImage('assets/icons/privacy.png'),
+                                    color: _privacyMode ? Colors.white : Colors.white70,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  AnimatedSize(
+                                    duration: const Duration(milliseconds: 250),
+                                    curve: Curves.easeInOut,
+                                    child: _privacyMinimized
+                                        ? const SizedBox.shrink()
+                                        : Text(
+                                            'Privacy',
+                                            style: TextStyle(color: _privacyMode ? Colors.white : Colors.white54),
+                                          ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Mode labels
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         // Thumbnail
                         GestureDetector(
