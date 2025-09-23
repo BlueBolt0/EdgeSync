@@ -5,6 +5,8 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   gal
   permission_handler_windows
+  share_plus
+  url_launcher_windows
   speech_to_text_windows
 )
 
