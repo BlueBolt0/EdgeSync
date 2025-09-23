@@ -11,6 +11,10 @@ import 'package:video_player/video_player.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:flutter/services.dart';
+import 'services/harmonizer_service.dart';
+import 'widgets/harmonizer_dialog.dart';
+import 'screens/harmonizer_settings_screen.dart';
+import 'widgets/ui_components.dart';
 
 class CameraApp extends StatefulWidget {
   const CameraApp({super.key});
@@ -50,6 +54,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
   String? _lastCapturedPath;
   VideoPlayerController? _videoPlayerController;
   late FaceDetector _faceDetector;
+  late HarmonizerService _harmonizerService;
   bool _isDetecting = false;
   int _countdown = 0;
   Timer? _timer;
@@ -65,21 +70,38 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
   bool _smileCaptureEnabled = true;
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _initSpeech();
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addObserver(this);
+  _detectDevicePerformance();
+  _initializeCamera();
+  _initSpeech();
+  _faceDetector = FaceDetector(
+    options: FaceDetectorOptions(
+      enableClassification: true, // Keep smile detection
+      enableLandmarks: false,     // Disable to save processing
+      enableContours: false,      // Disable to save processing
+      enableTracking: false,      // Disable to save processing
+      minFaceSize: 0.3,          // Only detect larger faces (less processing)
+      performanceMode: FaceDetectorMode.fast, // Use fast mode for older devices
+    ),
+  );
+  _detectDevicePerformance();
+  _initializeCamera();
+  _harmonizerService = HarmonizerService();
+}
 
-    _faceDetector = FaceDetector(
-      options: FaceDetectorOptions(
-        enableClassification: true,
-        performanceMode: FaceDetectorMode.fast,
-      ),
-    );
-
-    _detectDevicePerformance();
-    _initializeCamera();
-  }
+@override
+void dispose() {
+  WidgetsBinding.instance.removeObserver(this);
+  _cameraController?.dispose();
+  _videoPlayerController?.dispose();
+  _faceDetector.close(); // Dispose ML Kit face detector
+  _harmonizerService.dispose(); // Dispose harmonizer service
+  _timer?.cancel();      // Cancel any active countdown
+  _processingTimer?.cancel(); // Cancel processing timer
+  super.dispose();
+}
 
   void _initSpeech() async {
     _speechEnabled = await _speechToText.initialize();
@@ -121,17 +143,6 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Voice: $command')),
     );
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _cameraController?.dispose();
-    _videoPlayerController?.dispose();
-    _faceDetector.close();
-    _timer?.cancel();
-    _processingTimer?.cancel();
-    super.dispose();
   }
 
   @override
@@ -302,10 +313,35 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Photo saved to gallery!')),
         );
+
+        // If harmonizer is enabled, show the harmonizer dialog
+        if (_harmoniser) {
+          _showHarmonizerDialog(photo.path);
+        }
       }
     } catch (e) {
       _showErrorDialog('Error capturing photo: $e');
     }
+  }
+
+  void _showHarmonizerDialog(String imagePath) {
+    // Ensure any existing dialog is dismissed first
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    
+    // Small delay to ensure proper cleanup
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (context) => HarmonizerDialog(
+            key: ValueKey('harmonizer_${DateTime.now().millisecondsSinceEpoch}'),
+            imagePath: imagePath,
+            harmonizerService: _harmonizerService,
+          ),
+        );
+      }
+    });
   }
 
   Future<void> _startVideoRecording() async {
@@ -384,6 +420,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
               const Center(child: CircularProgressIndicator()),
             
             if (_countdown > 0)
+              AnimatedCountdownWidget(countdown: _countdown),
               Center(
                 child: Text('$_countdown', style: const TextStyle(color: Colors.white, fontSize: 96))
               ),
@@ -408,38 +445,50 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
               left: 0,
               right: 0,
               top: 8,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Row(
-                    children: [
-                      _buildTopIconButton(Icons.settings, onTap: () {}),
-                      const SizedBox(width: 8),
-                      _buildTopIconButton(_flashIconData(), onTap: _toggleFlash),
-                      const SizedBox(width: 8),
-                      _buildTopIconButton(Icons.timer, onTap: () {}),
-                      const SizedBox(width: 8),
-                      _buildTopIconButton(
-                        _isOldDevice ? Icons.speed : Icons.speed_outlined, 
-                        onTap: _togglePerformanceMode
-                      ),
-                      const SizedBox(width: 16),
-                      _buildTopIconButton(
-                        _smileCaptureEnabled ? Icons.emoji_emotions : Icons.emoji_emotions_outlined,
-                        onTap: () {
-                          setState(() {
-                            _smileCaptureEnabled = !_smileCaptureEnabled;
-                          });
-                        },
-                        color: _smileCaptureEnabled ? Colors.yellow : Colors.white,
-                      ),
-                      const SizedBox(width: 16),
-                      _buildTopIconButton(Icons.crop_7_5, onTap: () {}),
-                      const SizedBox(width: 8),
-                      _buildTopIconButton(Icons.photo_size_select_actual, onTap: () {}),
-                    ],
-                  ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        _buildTopIconButton(Icons.settings, onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const HarmonizerSettingsScreen(),
+                            ),
+                          );
+                        }),
+                        const SizedBox(width: 8),
+                        _buildTopIconButton(_flashIconData(), onTap: _toggleFlash),
+                        const SizedBox(width: 8),
+                        _buildTopIconButton(Icons.timer, onTap: () {}),
+                        const SizedBox(width: 8),
+                        _buildTopIconButton(
+                          _isOldDevice ? Icons.speed : Icons.speed_outlined, 
+                          onTap: _togglePerformanceMode
+                        ),
+                        const SizedBox(width: 16),
+                        _buildTopIconButton(
+                          _smileCaptureEnabled ? Icons.emoji_emotions : Icons.emoji_emotions_outlined,
+                          onTap: () {
+                            setState(() {
+                              _smileCaptureEnabled = !_smileCaptureEnabled;
+                            });
+                          },
+                          color: _smileCaptureEnabled ? Colors.yellow : Colors.white,
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        _buildTopIconButton(Icons.crop_7_5, onTap: () {}),
+                        const SizedBox(width: 8),
+                        _buildTopIconButton(Icons.photo_size_select_actual, onTap: () {}),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -461,7 +510,9 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           // Harmoniser button (left)
-                          GestureDetector(
+                          HarmonizerButton(
+                            isActive: _harmoniser,
+                            isMinimized: _harmoniserMinimized,
                             onTap: () {
                               setState(() {
                                 final newVal = !_harmoniser;
@@ -478,39 +529,12 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
                                 }
                               });
                             },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: _harmoniser ? Colors.teal : Colors.grey.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ImageIcon(
-                                    AssetImage('assets/icons/harmonizer.png'),
-                                    color: _harmoniser ? Colors.white : Colors.white70,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  // animated label
-                                  AnimatedSize(
-                                    duration: const Duration(milliseconds: 250),
-                                    curve: Curves.easeInOut,
-                                    child: _harmoniserMinimized
-                                        ? const SizedBox.shrink()
-                                        : Text(
-                                            'Harmoniser',
-                                            style: TextStyle(color: _harmoniser ? Colors.white : Colors.white54),
-                                          ),
-                                  ),
-                                ],
-                              ),
-                            ),
                           ),
 
                           // Privacy button (right)
-                          GestureDetector(
+                          PrivacyButton(
+                            isActive: _privacyMode,
+                            isMinimized: _privacyMinimized,
                             onTap: () {
                               setState(() {
                                 final newVal = !_privacyMode;
@@ -527,34 +551,6 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
                                 }
                               });
                             },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: _privacyMode ? Colors.deepPurple : Colors.grey.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ImageIcon(
-                                    AssetImage('assets/icons/privacy.png'),
-                                    color: _privacyMode ? Colors.white : Colors.white70,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  AnimatedSize(
-                                    duration: const Duration(milliseconds: 250),
-                                    curve: Curves.easeInOut,
-                                    child: _privacyMinimized
-                                        ? const SizedBox.shrink()
-                                        : Text(
-                                            'Privacy',
-                                            style: TextStyle(color: _privacyMode ? Colors.white : Colors.white54),
-                                          ),
-                                  ),
-                                ],
-                              ),
-                            ),
                           ),
                         ],
                       ),
@@ -624,6 +620,7 @@ class MediaPreviewScreen extends StatefulWidget {
 
 class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   VideoPlayerController? _videoPlayerController;
+  late final HarmonizerService _harmonizerService;
   bool get _isVideo => path.extension(widget.filePath) == '.mp4';
 
   @override
@@ -646,7 +643,22 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(backgroundColor: Colors.black, elevation: 0),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text(
+          _isVideo ? 'Video Preview' : 'Photo Preview',
+          style: const TextStyle(color: Colors.white),
+        ),
+        actions: [
+          if (!_isVideo)
+            IconButton(
+              tooltip: 'Harmonizer',
+              onPressed: _openHarmonizer,
+              icon: const Icon(Icons.auto_awesome, color: Colors.tealAccent),
+            ),
+        ],
+      ),
       body: Center(
         child: _isVideo
             ? (_videoPlayerController?.value.isInitialized ?? false)
@@ -665,6 +677,25 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
                   )
                 : const CircularProgressIndicator()
             : Image.file(File(widget.filePath)),
+      ),
+      floatingActionButton: !_isVideo
+          ? FloatingActionButton.extended(
+              onPressed: _openHarmonizer,
+              backgroundColor: Colors.teal,
+              icon: const Icon(Icons.auto_awesome, color: Colors.white),
+              label: const Text('Harmonizer', style: TextStyle(color: Colors.white)),
+            )
+          : null,
+    );
+  }
+
+  void _openHarmonizer() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => HarmonizerDialog(
+        imagePath: widget.filePath,
+        harmonizerService: _harmonizerService,
       ),
     );
   }
