@@ -47,6 +47,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
   final bool _isPhotoMode = true;
   FlashMode _flashMode = FlashMode.off;
   bool _isInitialized = false;
+  String? _initError;
   bool _privacyMode = false;
   bool _harmoniser = false;
   bool _harmoniserMinimized = false;
@@ -414,7 +415,8 @@ void dispose() {
       body: SafeArea(
         child: Stack(
           children: [
-            if (_isInitialized && _cameraController != null)
+            // Use the controller's own state to decide whether to show preview.
+            if (_cameraController != null && _cameraController!.value.isInitialized)
               Positioned.fill(child: CameraPreview(_cameraController!))
             else
               const Center(child: CircularProgressIndicator()),
@@ -423,6 +425,33 @@ void dispose() {
               AnimatedCountdownWidget(countdown: _countdown),
               Center(
                 child: Text('$_countdown', style: const TextStyle(color: Colors.white, fontSize: 96))
+            if (_countdown > 0)
+              Center(
+                child: Text('$_countdown', style: const TextStyle(color: Colors.white, fontSize: 96))
+              ),
+
+            // Debug overlay to help diagnose preview / init problems
+            Positioned(
+              left: 8,
+              top: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('controller: ${_cameraController != null}', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                    Text('ctrl.init: ${_cameraController?.value.isInitialized ?? false}', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                    Text('isInitialized flag: $_isInitialized', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                    Text('cameras: ${_cameras.length}', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                    if (_initError != null) Text('error: $_initError', style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                  ],
+                ),
+              ),
+            ),
               ),
 
             Positioned(
