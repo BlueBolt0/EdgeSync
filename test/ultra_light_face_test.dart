@@ -7,6 +7,8 @@ import 'dart:async';
 void main() => runApp(UltraLightFaceApp());
 
 class UltraLightFaceApp extends StatelessWidget {
+  const UltraLightFaceApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -17,6 +19,8 @@ class UltraLightFaceApp extends StatelessWidget {
 }
 
 class UltraLightFaceScreen extends StatefulWidget {
+  const UltraLightFaceScreen({super.key});
+
   @override
   _UltraLightFaceScreenState createState() => _UltraLightFaceScreenState();
 }
@@ -126,7 +130,7 @@ class _UltraLightFaceScreenState extends State<UltraLightFaceScreen> {
     _detectionCount++;
     
     setState(() {
-      _faceInfo = '🔄 Processing... (${_detectionCount}/$MAX_DETECTIONS_PER_SESSION)';
+      _faceInfo = '🔄 Processing... ($_detectionCount/$MAX_DETECTIONS_PER_SESSION)';
     });
     
     try {
@@ -143,9 +147,9 @@ class _UltraLightFaceScreenState extends State<UltraLightFaceScreen> {
                   ? '😄 Smile: ${(smileProb * 100).toStringAsFixed(1)}%'
                   : '😐 Smile: Unknown';
               
-              _faceInfo = '✅ Found ${faces.length} face(s)\n$smileText\n(Detection ${_detectionCount}/$MAX_DETECTIONS_PER_SESSION)';
+              _faceInfo = '✅ Found ${faces.length} face(s)\n$smileText\n(Detection $_detectionCount/$MAX_DETECTIONS_PER_SESSION)';
             } else {
-              _faceInfo = '👤 No faces detected\n(Detection ${_detectionCount}/$MAX_DETECTIONS_PER_SESSION)';
+              _faceInfo = '👤 No faces detected\n(Detection $_detectionCount/$MAX_DETECTIONS_PER_SESSION)';
             }
           });
         }
@@ -153,7 +157,7 @@ class _UltraLightFaceScreenState extends State<UltraLightFaceScreen> {
     } catch (e) {
       print('❌ Face detection error: $e');
       if (mounted) {
-        setState(() => _faceInfo = '❌ Detection error: $e\n(Detection ${_detectionCount}/$MAX_DETECTIONS_PER_SESSION)');
+        setState(() => _faceInfo = '❌ Detection error: $e\n(Detection $_detectionCount/$MAX_DETECTIONS_PER_SESSION)');
       }
     } finally {
       _isDetecting = false;
@@ -270,7 +274,7 @@ class _UltraLightFaceScreenState extends State<UltraLightFaceScreen> {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'Ultra-Light Mode: Every ${PROCESSING_INTERVAL.inSeconds}s, Max ${MAX_DETECTIONS_PER_SESSION} detections',
+                  'Ultra-Light Mode: Every ${PROCESSING_INTERVAL.inSeconds}s, Max $MAX_DETECTIONS_PER_SESSION detections',
                   style: TextStyle(color: Colors.yellow, fontSize: 12),
                 ),
                 Text(

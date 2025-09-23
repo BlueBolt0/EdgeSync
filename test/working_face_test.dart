@@ -7,6 +7,8 @@ import 'dart:async';
 void main() => runApp(WorkingFaceApp());
 
 class WorkingFaceApp extends StatelessWidget {
+  const WorkingFaceApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -18,6 +20,8 @@ class WorkingFaceApp extends StatelessWidget {
 }
 
 class WorkingFaceScreen extends StatefulWidget {
+  const WorkingFaceScreen({super.key});
+
   @override
   _WorkingFaceScreenState createState() => _WorkingFaceScreenState();
 }
