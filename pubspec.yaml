@@ -20,6 +20,11 @@ dependencies:
   video_player: ^2.8.6
   google_mlkit_face_detection: ^0.13.1
   google_mlkit_commons: ^0.11.0
+  # For noise injection ML models
+  tflite_flutter: ^0.10.4
+  image: ^4.2.0
+  # For Windows desktop file picker
+  file_picker: ^8.0.7
   # For text recognition (OCR)
   google_mlkit_text_recognition: ^0.15.0
   # For HTTP requests to Groq API
@@ -47,6 +52,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icons/
+    - assets/models/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
