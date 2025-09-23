@@ -13,10 +13,10 @@ class SmileCapture extends StatefulWidget {
   final bool? isOldDevice;
 
   const SmileCapture({
-    Key? key, 
+    super.key, 
     required this.cameraController,
     this.isOldDevice,
-  }) : super(key: key);
+  });
 
   @override
   State<SmileCapture> createState() => _SmileCaptureState();
