@@ -420,14 +420,13 @@ void dispose() {
               Positioned.fill(child: CameraPreview(_cameraController!))
             else
               const Center(child: CircularProgressIndicator()),
-            
+
+            // Show animated countdown overlay when active
             if (_countdown > 0)
-              AnimatedCountdownWidget(countdown: _countdown),
-              Center(
-                child: Text('$_countdown', style: const TextStyle(color: Colors.white, fontSize: 96))
-            if (_countdown > 0)
-              Center(
-                child: Text('$_countdown', style: const TextStyle(color: Colors.white, fontSize: 96))
+              Positioned.fill(
+                child: Center(
+                  child: AnimatedCountdownWidget(countdown: _countdown),
+                ),
               ),
 
             // Debug overlay to help diagnose preview / init problems
@@ -452,7 +451,6 @@ void dispose() {
                 ),
               ),
             ),
-              ),
 
             Positioned(
               top: 16,
