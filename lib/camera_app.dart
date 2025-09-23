@@ -364,6 +364,13 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
     );
   }
 
+  Widget _buildTopIconButton(IconData icon, {VoidCallback? onTap, Color? color}) {
+    return IconButton(
+      icon: Icon(icon, color: color ?? Colors.white),
+      onPressed: onTap,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -395,7 +402,9 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
                     onPressed: () => setState(() => _smileCaptureEnabled = !_smileCaptureEnabled),
                   ),
                 ],
-              )
+              ),
+            ),
+            Positioned(
               left: 0,
               right: 0,
               top: 8,
@@ -656,7 +665,7 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
                             : _videoPlayerController!.play();
                         });
                       },
-                      child: VideoPlayer(_videoPlayerController!)
+                      child: VideoPlayer(_videoPlayerController!),
                     ),
                   )
                 : const CircularProgressIndicator()
