@@ -8,11 +8,10 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:path/path.dart' as path;
 import 'package:gal/gal.dart';
 import 'package:video_player/video_player.dart';
-import 'package:speech_to_text/speech_to_text.dart';
-import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:flutter/services.dart';
 import 'noise_injection/android_noise_injector.dart';
 import 'services/harmonizer_service.dart';
+import 'services/voice_command_service.dart';
 import 'widgets/harmonizer_dialog.dart';
 import 'screens/harmonizer_settings_screen.dart';
 import 'widgets/ui_components.dart';
@@ -25,10 +24,7 @@ class CameraApp extends StatefulWidget {
 }
 
 class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
-  // Fields are already declared below, so remove these duplicates.
-  final SpeechToText _speechToText = SpeechToText();
-  bool _speechEnabled = false;
-  String _lastWords = '';
+
   IconData _flashIconData() {
     switch (_flashMode) {
       case FlashMode.off:
@@ -45,7 +41,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
   List<CameraDescription> _cameras = [];
   int _selectedCameraIndex = 0;
   bool _isRecording = false;
-  final bool _isPhotoMode = true;
+  bool _isPhotoMode = true;
   FlashMode _flashMode = FlashMode.off;
   bool _isInitialized = false;
   String? _initError;
@@ -57,19 +53,24 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
   VideoPlayerController? _videoPlayerController;
   late FaceDetector _faceDetector;
   late HarmonizerService _harmonizerService;
+  late VoiceCommandService _voiceCommandService;
   bool _isDetecting = false;
   int _countdown = 0;
   Timer? _timer;
   Timer? _processingTimer;
   int _photoIndex = 1;
   CameraImage? _latestImage;
-
+  
   bool _isOldDevice = false;
+  Duration _processInterval = const Duration(milliseconds: 1500);
   static const Duration kOldDeviceInterval = Duration(milliseconds: 1500);
   static const Duration kNewDeviceInterval = Duration(milliseconds: 500);
-  Duration _processInterval = kNewDeviceInterval;
+  
+  static const int MAX_FACES_TO_PROCESS = 6;
 
   bool _smileCaptureEnabled = true;
+  bool _voiceControlEnabled = false;
+
 
   @override
 void initState() {
@@ -79,6 +80,10 @@ void initState() {
   _initializeCamera();
   _initializeNoiseInjector();
   _initSpeech();
+  _initServices();
+}
+
+Future<void> _initServices() async {
   _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
       enableClassification: true, // Keep smile detection
@@ -89,9 +94,21 @@ void initState() {
       performanceMode: FaceDetectorMode.fast, // Use fast mode for older devices
     ),
   );
-  _detectDevicePerformance();
-  _initializeCamera();
+  
   _harmonizerService = HarmonizerService();
+  _voiceCommandService = VoiceCommandService();
+  await _voiceCommandService.init();
+  _voiceCommandService.actionStream.listen((action) {
+    _handleVoiceCommand(action);
+  });
+  _voiceCommandService.listeningStateStream.listen((isListening) {
+    setState(() {
+      _voiceControlEnabled = isListening;
+    });
+  });
+
+  await _initializeCamera();
+  _detectDevicePerformance();
 }
 
 @override
@@ -101,58 +118,18 @@ void dispose() {
   _videoPlayerController?.dispose();
   _faceDetector.close(); // Dispose ML Kit face detector
   _harmonizerService.dispose(); // Dispose harmonizer service
+  _voiceCommandService.dispose();
   _timer?.cancel();      // Cancel any active countdown
   _processingTimer?.cancel(); // Cancel processing timer
   super.dispose();
 }
-
-  void _initSpeech() async {
-    _speechEnabled = await _speechToText.initialize();
-    setState(() {});
-  }
-
-  void _startListening() async {
-    await _speechToText.listen(onResult: _onSpeechResult);
-    setState(() {});
-  }
-
-  void _stopListening() async {
-    await _speechToText.stop();
-    setState(() {});
-  }
-
-  void _onSpeechResult(SpeechRecognitionResult result) {
-    setState(() {
-      _lastWords = result.recognizedWords;
-    });
-    if (result.finalResult) {
-      _handleVoiceCommand(_lastWords);
-    }
-  }
-
-  void _handleVoiceCommand(String command) {
-    final cmd = command.toLowerCase();
-    if (cmd.contains('photo') || cmd.contains('capture')) {
-      _capturePhoto();
-    } else if (cmd.contains('video') && cmd.contains('start')) {
-      _startVideoRecording();
-    } else if (cmd.contains('video') && cmd.contains('stop')) {
-      _stopVideoRecording();
-    } else if (cmd.contains('switch')) {
-      _switchCamera();
-    } else if (cmd.contains('smile')) {
-      setState(() => _smileCaptureEnabled = !_smileCaptureEnabled);
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Voice: $command')),
-    );
-  }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (_cameraController == null || !_cameraController!.value.isInitialized) {
       return;
     }
+
     if (state == AppLifecycleState.inactive) {
       _cameraController?.dispose();
     } else if (state == AppLifecycleState.resumed) {
@@ -161,7 +138,33 @@ void dispose() {
   }
 
   void _detectDevicePerformance() {
-    _processInterval = kNewDeviceInterval;
+    if (Platform.isAndroid) {
+      try {
+        _isOldDevice = _isLikelyOldDevice();
+        _processInterval = _isOldDevice ? kOldDeviceInterval : kNewDeviceInterval;
+        
+        print('Device performance detected: ${_isOldDevice ? "Old" : "New"} device');
+        print('Processing interval set to: ${_processInterval.inMilliseconds}ms');
+      } catch (e) {
+        _isOldDevice = true;
+        _processInterval = kOldDeviceInterval;
+        print('Device detection failed, using conservative settings: $e');
+      }
+    } else {
+      _isOldDevice = false;
+      _processInterval = kNewDeviceInterval;
+    }
+  }
+
+  bool _isLikelyOldDevice() {
+    final stopwatch = Stopwatch()..start();
+    var result = 0;
+    for (int i = 0; i < 100000; i++) {
+      result += i * 2;
+    }
+    stopwatch.stop();
+    if (result < 0) print('Unexpected result');
+    return stopwatch.elapsedMilliseconds > 5;
   }
 
   Future<void> _initializeNoiseInjector() async {
@@ -174,6 +177,7 @@ void dispose() {
   }
 
   Future<void> _initializeCamera() async {
+    // Request camera permissions
     final cameraPermission = await Permission.camera.request();
     final microphonePermission = await Permission.microphone.request();
 
@@ -191,112 +195,180 @@ void dispose() {
     }
   }
 
+
   Future<void> _setupCameraController() async {
-    if (_cameras.isEmpty) return;
+  if (_cameras.isEmpty) return;
 
-    final controller = CameraController(
-      _cameras[_selectedCameraIndex],
-      ResolutionPreset.medium,
-      enableAudio: true,
-      imageFormatGroup: ImageFormatGroup.yuv420,
-    );
-
+  final formats = [ImageFormatGroup.nv21, ImageFormatGroup.yuv420];
+  
+  for (final format in formats) {
     try {
-      await controller.initialize();
-      await controller.setFlashMode(_flashMode);
+      _cameraController = CameraController(
+        _cameras[_selectedCameraIndex],
+        ResolutionPreset.medium,
+        enableAudio: true,
+        imageFormatGroup: format,
+      );
 
-      controller.startImageStream((cameraImage) {
+      await _cameraController!.initialize();
+      await _cameraController!.setFlashMode(_flashMode);
+
+      setState(() {
+        _isInitialized = true;
+      });
+
+      _cameraController?.startImageStream((cameraImage) async {
         _latestImage = cameraImage;
       });
 
-      _processingTimer = Timer.periodic(_processInterval, (_) {
+      _processingTimer = Timer.periodic(_processInterval, (timer) {
         if (_latestImage != null && !_isDetecting && _countdown == 0) {
           _processLatestImage();
         }
       });
-      
-      setState(() {
-        _cameraController = controller;
-        _isInitialized = true;
-      });
 
+      return;
+      
     } catch (e) {
-      controller.dispose();
-      _showErrorDialog('Camera initialization failed: $e');
+      _cameraController?.dispose();
+      _cameraController = null;
     }
   }
+  
+  // If we get here, all formats failed
+  _showErrorDialog('Camera initialization failed with all image formats');
+}
 
   Future<void> _processLatestImage() async {
-    if (_latestImage == null || !_isDetecting || !_smileCaptureEnabled) return;
+  if (_latestImage == null || _isDetecting || !_smileCaptureEnabled) return;
+
     _isDetecting = true;
 
     try {
       final inputImage = _createInputImage(_latestImage!);
       if (inputImage != null) {
         final faces = await _faceDetector.processImage(inputImage);
+
         if (faces.isNotEmpty) {
-          final smilingCount = faces
-              .where((f) => (f.smilingProbability ?? 0) > 0.2)
+          final limitedFaces = faces.take(MAX_FACES_TO_PROCESS).toList();
+          
+          int smilingCount = limitedFaces
+              .where((face) => face.smilingProbability != null && face.smilingProbability! >= 0.2)
               .length;
-          if (smilingCount / faces.length >= 0.5) {
+
+          if (smilingCount / limitedFaces.length >= 0.5) {
             _startCountdown();
           }
         }
       }
     } catch (e) {
-      print("Error processing image: $e");
-    } finally {
-      _isDetecting = false;
+    }
+
+    _isDetecting = false;
+  }
+
+  InputImage? _createInputImage(CameraImage image) {
+    try {
+      final camera = _cameraController!.description;
+      
+      // Determine rotation based on camera
+      InputImageRotation rotation;
+      if (camera.lensDirection == CameraLensDirection.front) {
+        rotation = InputImageRotation.rotation270deg;
+      } else {
+        rotation = InputImageRotation.rotation90deg;
+      }
+
+      // Create input image metadata
+      final inputImageData = InputImageMetadata(
+        size: Size(image.width.toDouble(), image.height.toDouble()),
+        rotation: rotation,
+        format: _getInputImageFormat(image.format),
+        bytesPerRow: image.planes[0].bytesPerRow,
+      );
+
+      // Create InputImage from camera image
+      return InputImage.fromBytes(
+        bytes: image.planes[0].bytes,
+        metadata: inputImageData,
+      );
+    } catch (e) {
+      return null;
     }
   }
 
-   InputImage? _createInputImage(CameraImage image) {
-    final camera = _cameras[_selectedCameraIndex];
-    final rotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation) ?? InputImageRotation.rotation0deg;
-    
-    final format = InputImageFormatValue.fromRawValue(image.format.raw) ?? InputImageFormat.nv21;
-
-    return InputImage.fromBytes(
-      bytes: image.planes[0].bytes,
-      metadata: InputImageMetadata(
-        size: Size(image.width.toDouble(), image.height.toDouble()),
-        rotation: rotation,
-        format: format,
-        bytesPerRow: image.planes[0].bytesPerRow,
-      ),
-    );
+  InputImageFormat _getInputImageFormat(ImageFormat format) {
+    switch (format.group) {
+      case ImageFormatGroup.nv21:
+        return InputImageFormat.nv21;
+      case ImageFormatGroup.yuv420:
+        return InputImageFormat.yuv420;
+      default:
+        return InputImageFormat.yuv420;
+    }
   }
+
 
   void _startCountdown() {
-    if (_countdown > 0 || _photoIndex > 4) return;
-    setState(() => _countdown = 3);
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_countdown == 1) {
-        timer.cancel();
-        _capturePhoto();
-        setState(() => _countdown = 0);
-        _photoIndex++;
-      } else {
-        setState(() => _countdown--);
-      }
+  if (_countdown > 0 || _photoIndex > 4) return; // max 4 photos
+
+  setState(() {
+    _countdown = 3; // 3-second timer
+  });
+
+  _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+    setState(() {
+      _countdown--;
     });
-  }
+
+    if (_countdown == 0) {
+      timer.cancel();
+      await _capturePhoto(); // capture the photo when countdown ends
+      _photoIndex++;         // increment photo counter
+    }
+  });
+}
 
   Future<void> _switchCamera() async {
     if (_cameras.length < 2) return;
-    setState(() => _isInitialized = false);
+
+    setState(() {
+      _isInitialized = false;
+    });
+
+    // Stop processing timer and image stream
     _processingTimer?.cancel();
+    await _cameraController?.stopImageStream().catchError((_) {});
     await _cameraController?.dispose();
+
     _selectedCameraIndex = (_selectedCameraIndex + 1) % _cameras.length;
     await _setupCameraController();
   }
 
   Future<void> _toggleFlash() async {
     if (_cameraController == null) return;
-    final newMode = _flashMode == FlashMode.off ? FlashMode.torch : FlashMode.off;
+
+    FlashMode newFlashMode;
+    switch (_flashMode) {
+      case FlashMode.off:
+        newFlashMode = FlashMode.auto;
+        break;
+      case FlashMode.auto:
+        newFlashMode = FlashMode.always;
+        break;
+      case FlashMode.always:
+        newFlashMode = FlashMode.torch;
+        break;
+      case FlashMode.torch:
+        newFlashMode = FlashMode.off;
+        break;
+    }
+
     try {
-      await _cameraController!.setFlashMode(newMode);
-      setState(() => _flashMode = newMode);
+      await _cameraController!.setFlashMode(newFlashMode);
+      setState(() {
+        _flashMode = newFlashMode;
+      });
     } catch (e) {
       _showErrorDialog('Error changing flash mode: $e');
     }
@@ -306,13 +378,29 @@ void dispose() {
     setState(() {
       _isOldDevice = !_isOldDevice;
       _processInterval = _isOldDevice ? kOldDeviceInterval : kNewDeviceInterval;
+      
+      // Restart the processing timer with new interval
       _processingTimer?.cancel();
-      _processingTimer = Timer.periodic(_processInterval, (_) {
-         if (_latestImage != null && !_isDetecting && _countdown == 0) {
+      _processingTimer = Timer.periodic(_processInterval, (timer) {
+        if (_latestImage != null && !_isDetecting && _countdown == 0) {
           _processLatestImage();
         }
       });
     });
+    
+    // Show feedback to user
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _isOldDevice 
+            ? 'Performance Mode: Old Device (${kOldDeviceInterval.inMilliseconds}ms)' 
+            : 'Performance Mode: New Device (${kNewDeviceInterval.inMilliseconds}ms)',
+          style: const TextStyle(color: Colors.white),
+        ),
+        backgroundColor: _isOldDevice ? Colors.orange : Colors.green,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<void> _applyNoiseToLastPhoto() async {
@@ -363,11 +451,18 @@ void dispose() {
   }
 
   Future<void> _capturePhoto() async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      return;
+    }
+
     try {
-      final photo = await _cameraController!.takePicture();
+      final XFile photo = await _cameraController!.takePicture();
       await Gal.putImage(photo.path);
-      setState(() => _lastCapturedPath = photo.path);
+      
+      setState(() {
+        _lastCapturedPath = photo.path;
+      });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Photo saved to gallery!')),
@@ -404,24 +499,34 @@ void dispose() {
   }
 
   Future<void> _startVideoRecording() async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      return;
+    }
+
     try {
       await _cameraController!.startVideoRecording();
-      setState(() => _isRecording = true);
+      setState(() {
+        _isRecording = true;
+      });
     } catch (e) {
       _showErrorDialog('Error starting video recording: $e');
     }
   }
 
   Future<void> _stopVideoRecording() async {
-    if (_cameraController == null || !_cameraController!.value.isRecordingVideo) return;
+    if (_cameraController == null || !_cameraController!.value.isRecordingVideo) {
+      return;
+    }
+
     try {
-      final video = await _cameraController!.stopVideoRecording();
+      final XFile video = await _cameraController!.stopVideoRecording();
       await Gal.putVideo(video.path);
+      
       setState(() {
         _isRecording = false;
         _lastCapturedPath = video.path;
       });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Video saved to gallery!')),
@@ -433,7 +538,6 @@ void dispose() {
   }
 
   void _showErrorDialog(String message) {
-    if (!mounted) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -451,6 +555,7 @@ void dispose() {
 
   void _showLastCaptured() {
     if (_lastCapturedPath == null) return;
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -459,11 +564,39 @@ void dispose() {
     );
   }
 
-  Widget _buildTopIconButton(IconData icon, {VoidCallback? onTap, Color? color}) {
-    return IconButton(
-      icon: Icon(icon, color: color ?? Colors.white),
-      onPressed: onTap,
-    );
+  void _handleVoiceCommand(CameraAction action) {
+    switch (action) {
+      case CameraAction.takePicture:
+        _capturePhoto();
+        break;
+      case CameraAction.startVideo:
+        _startVideoRecording();
+        break;
+      case CameraAction.stopVideo:
+        _stopVideoRecording();
+        break;
+      case CameraAction.switchCamera:
+        _switchCamera();
+        break;
+      case CameraAction.toggleFlash:
+        _toggleFlash();
+        break;
+      case CameraAction.toggleHarmonizer:
+        setState(() {
+          _harmoniser = !_harmoniser;
+        });
+        break;
+      case CameraAction.togglePhotoMode:
+        setState(() {
+          _isPhotoMode = true;
+        });
+        break;
+      case CameraAction.toggleVideoMode:
+        setState(() {
+          _isPhotoMode = false;
+        });
+        break;
+    }
   }
 
   @override
@@ -526,6 +659,20 @@ void dispose() {
                 ],
               ),
             ),
+            // Camera preview (fills available space)
+            Positioned.fill(
+              child: _isInitialized && _cameraController != null
+                  ? CameraPreview(_cameraController!)
+                  : Container(
+                      color: Colors.black,
+                      child: const Center(
+                        child: CircularProgressIndicator(color: Colors.white),
+                      ),
+                    ),
+            ),
+            // COUNTDOWN OVERLAY
+            if (_countdown > 0)
+              AnimatedCountdownWidget(countdown: _countdown),
             Positioned(
               left: 0,
               right: 0,
@@ -582,14 +729,20 @@ void dispose() {
                 ),
               ),
             ),
-            
+
+            // (center hint removed as requested)
+
+            // Bottom control panel
             Positioned(
-              bottom: 0,
               left: 0,
               right: 0,
+              bottom: 0,
               child: Container(
-                color: Colors.black26,
-                padding: const EdgeInsets.all(16.0),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF111111),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+                ),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -649,59 +802,138 @@ void dispose() {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Thumbnail
+                        _buildModeLabel('PORTRAIT', false),
+                        const SizedBox(width: 12),
+                        _buildModeLabel('PHOTO', _isPhotoMode),
+                        const SizedBox(width: 12),
+                        _buildModeLabel('VIDEO', !_isPhotoMode),
+                        const SizedBox(width: 12),
+                        _buildModeLabel('MORE', false),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Controls row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Last captured thumbnail
                         GestureDetector(
                           onTap: _showLastCaptured,
                           child: Container(
-                            width: 60, height: 60,
+                            width: 52,
+                            height: 52,
                             decoration: BoxDecoration(
-                              color: Colors.black,
-                              border: Border.all(color: Colors.white),
-                              image: _lastCapturedPath != null ? DecorationImage(
-                                image: FileImage(File(_lastCapturedPath!)),
-                                fit: BoxFit.cover,
-                              ) : null,
+                              color: Colors.grey.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.white24, width: 1.5),
                             ),
-                            child: _lastCapturedPath == null ? const Icon(Icons.photo_library, color: Colors.white) : null,
+                            child: _lastCapturedPath != null
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.file(
+                                      File(_lastCapturedPath!),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  )
+                                : const Icon(Icons.photo_library, color: Colors.white54),
                           ),
                         ),
+
                         // Shutter
                         GestureDetector(
-                          onTap: _isPhotoMode ? _capturePhoto : (_isRecording ? _stopVideoRecording : _startVideoRecording),
-                          child: Icon(_isPhotoMode ? Icons.camera_alt : Icons.videocam, color: _isRecording ? Colors.red : Colors.white, size: 72),
+                          onTap: _isPhotoMode
+                              ? _capturePhoto
+                              : _isRecording
+                                  ? _stopVideoRecording
+                                  : _startVideoRecording,
+                          child: Container(
+                            width: 78,
+                            height: 78,
+                            decoration: BoxDecoration(
+                              color: _isPhotoMode ? Colors.white : Colors.red,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white70, width: 3),
+                            ),
+                            child: Center(
+                              child: _isRecording
+                                  ? const Icon(Icons.stop, color: Colors.white, size: 30)
+                                  : Icon(
+                                      _isPhotoMode ? Icons.camera_alt : Icons.videocam,
+                                      color: _isPhotoMode ? Colors.black : Colors.white,
+                                      size: 30,
+                                    ),
+                            ),
+                          ),
                         ),
-                        // Switch Camera
-                        IconButton(
-                          icon: const Icon(Icons.cameraswitch, color: Colors.white, size: 36),
-                          onPressed: _switchCamera,
+
+                        // Switch camera
+                        GestureDetector(
+                          onTap: _switchCamera,
+                          child: Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.cameraswitch, color: Colors.white70),
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
                     // Voice Command
-                    FloatingActionButton(
-                      onPressed: _speechToText.isNotListening ? _startListening : _stopListening,
-                      tooltip: 'Listen',
-                      child: Icon(_speechToText.isNotListening ? Icons.mic_off : Icons.mic),
+                    IconButton(
+                      icon: Icon(_voiceControlEnabled ? Icons.mic : Icons.mic_off, color: Colors.white),
+                      onPressed: () {
+                        if (_voiceControlEnabled) {
+                          _voiceCommandService.stopListening();
+                        } else {
+                          _voiceCommandService.startListening();
+                        }
+                      },
                     ),
-                    if (_lastWords.isNotEmpty) 
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8.0),
-                        child: Text(_lastWords, style: const TextStyle(color: Colors.white)),
-                      )
                   ],
                 ),
               ),
-            )
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTopIconButton(IconData icon, {required VoidCallback onTap, Color color = Colors.white70}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.45),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: color, size: 20),
+      ),
+    );
+  }
+
+  Widget _buildModeLabel(String text, bool selected) {
+    return AnimatedDefaultTextStyle(
+      duration: const Duration(milliseconds: 200),
+      style: TextStyle(
+        color: selected ? Colors.white : Colors.white54,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+        letterSpacing: 1.2,
+      ),
+      child: Text(text),
     );
   }
 }
 
 class MediaPreviewScreen extends StatefulWidget {
   final String filePath;
+
   const MediaPreviewScreen({super.key, required this.filePath});
 
   @override
@@ -711,7 +943,6 @@ class MediaPreviewScreen extends StatefulWidget {
 class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   VideoPlayerController? _videoPlayerController;
   late final HarmonizerService _harmonizerService;
-  bool get _isVideo => path.extension(widget.filePath) == '.mp4';
 
   @override
   void initState() {
@@ -721,12 +952,26 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
         ..initialize().then((_) => setState(() {}))
         ..setLooping(true);
     }
+  _harmonizerService = HarmonizerService();
+    _checkFileType();
   }
 
   @override
   void dispose() {
     _videoPlayerController?.dispose();
     super.dispose();
+  }
+
+  void _checkFileType() {
+    final extension = path.extension(widget.filePath).toLowerCase();
+    _isVideo = extension == '.mp4' || extension == '.mov' || extension == '.avi';
+    
+    if (_isVideo) {
+      _videoPlayerController = VideoPlayerController.file(File(widget.filePath))
+        ..initialize().then((_) {
+          setState(() {});
+        });
+    }
   }
 
   @override
@@ -751,22 +996,43 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
       ),
       body: Center(
         child: _isVideo
-            ? (_videoPlayerController?.value.isInitialized ?? false)
-                ? AspectRatio(
-                    aspectRatio: _videoPlayerController!.value.aspectRatio,
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _videoPlayerController!.value.isPlaying
-                            ? _videoPlayerController!.pause()
-                            : _videoPlayerController!.play();
-                        });
-                      },
-                      child: VideoPlayer(_videoPlayerController!),
-                    ),
+            ? _videoPlayerController != null && _videoPlayerController!.value.isInitialized
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      AspectRatio(
+                        aspectRatio: _videoPlayerController!.value.aspectRatio,
+                        child: VideoPlayer(_videoPlayerController!),
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            onPressed: () {
+                              setState(() {
+                                _videoPlayerController!.value.isPlaying
+                                    ? _videoPlayerController!.pause()
+                                    : _videoPlayerController!.play();
+                              });
+                            },
+                            icon: Icon(
+                              _videoPlayerController!.value.isPlaying
+                                  ? Icons.pause
+                                  : Icons.play_arrow,
+                              color: Colors.white,
+                              size: 50,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   )
                 : const CircularProgressIndicator()
-            : Image.file(File(widget.filePath)),
+            : Image.file(
+                File(widget.filePath),
+                fit: BoxFit.contain,
+              ),
       ),
       floatingActionButton: !_isVideo
           ? FloatingActionButton.extended(
