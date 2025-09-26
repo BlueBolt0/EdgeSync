@@ -9,6 +9,7 @@ import 'package:path/path.dart' as path;
 import 'package:gal/gal.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter/services.dart';
+import 'noise_injection/android_noise_injector.dart';
 import 'services/harmonizer_service.dart';
 import 'services/voice_command_service.dart';
 import 'widgets/harmonizer_dialog.dart';
@@ -43,6 +44,7 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
   bool _isPhotoMode = true;
   FlashMode _flashMode = FlashMode.off;
   bool _isInitialized = false;
+  String? _initError;
   bool _privacyMode = false;
   bool _harmoniser = false;
   bool _harmoniserMinimized = false;
@@ -74,6 +76,10 @@ class _CameraAppState extends State<CameraApp> with WidgetsBindingObserver, Sing
 void initState() {
   super.initState();
   WidgetsBinding.instance.addObserver(this);
+  _detectDevicePerformance();
+  _initializeCamera();
+  _initializeNoiseInjector();
+  _initSpeech();
   _initServices();
 }
 
@@ -159,6 +165,15 @@ void dispose() {
     stopwatch.stop();
     if (result < 0) print('Unexpected result');
     return stopwatch.elapsedMilliseconds > 5;
+  }
+
+  Future<void> _initializeNoiseInjector() async {
+    try {
+      await AndroidOptimizedNoiseInjector.init();
+      print('✅ Noise injector initialized');
+    } catch (e) {
+      print('❌ Failed to initialize noise injector: $e');
+    }
   }
 
   Future<void> _initializeCamera() async {
@@ -388,6 +403,53 @@ void dispose() {
     );
   }
 
+  Future<void> _applyNoiseToLastPhoto() async {
+    if (_lastCapturedPath == null) {
+      _showErrorDialog('No photo to apply noise to');
+      return;
+    }
+
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🎨 Applying AI-powered noise injection...'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+
+      // Read the image file
+      final imageFile = File(_lastCapturedPath!);
+      final imageBytes = await imageFile.readAsBytes();
+
+      final result = await AndroidOptimizedNoiseInjector.injectNoise(
+        imageBytes: imageBytes,
+        filename: 'noised_${DateTime.now().millisecondsSinceEpoch}',
+        useEnsemble: true,
+      );
+
+      if (result != null && result['success'] == true) {
+        setState(() {
+          _lastCapturedPath = result['outputPath'];
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Noise applied successfully!'),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'View',
+              onPressed: () => _showLastCaptured(),
+            ),
+          ),
+        );
+      } else {
+        _showErrorDialog('Failed to apply noise: ${result?['error'] ?? 'Unknown error'}');
+      }
+    } catch (e) {
+      _showErrorDialog('Error applying noise: $e');
+    }
+  }
+
   Future<void> _capturePhoto() async {
     if (_cameraController == null || !_cameraController!.value.isInitialized) {
       return;
@@ -544,6 +606,59 @@ void dispose() {
       body: SafeArea(
         child: Stack(
           children: [
+            // Use the controller's own state to decide whether to show preview.
+            if (_cameraController != null && _cameraController!.value.isInitialized)
+              Positioned.fill(child: CameraPreview(_cameraController!))
+            else
+              const Center(child: CircularProgressIndicator()),
+
+            // Show animated countdown overlay when active
+            if (_countdown > 0)
+              Positioned.fill(
+                child: Center(
+                  child: AnimatedCountdownWidget(countdown: _countdown),
+                ),
+              ),
+
+            // Debug overlay to help diagnose preview / init problems
+            Positioned(
+              left: 8,
+              top: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('controller: ${_cameraController != null}', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                    Text('ctrl.init: ${_cameraController?.value.isInitialized ?? false}', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                    Text('isInitialized flag: $_isInitialized', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                    Text('cameras: ${_cameras.length}', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                    if (_initError != null) Text('error: $_initError', style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                  ],
+                ),
+              ),
+            ),
+
+            Positioned(
+              top: 16,
+              right: 16,
+              child: Column(
+                children: [
+                   IconButton(
+                    icon: Icon(_flashMode == FlashMode.torch ? Icons.flash_on : Icons.flash_off, color: Colors.white),
+                    onPressed: _toggleFlash,
+                  ),
+                  IconButton(
+                    icon: Icon(_smileCaptureEnabled ? Icons.emoji_emotions : Icons.emoji_emotions_outlined, color: _smileCaptureEnabled ? Colors.yellow : Colors.white),
+                    onPressed: () => setState(() => _smileCaptureEnabled = !_smileCaptureEnabled),
+                  ),
+                ],
+              ),
+            ),
             // Camera preview (fills available space)
             Positioned.fill(
               child: _isInitialized && _cameraController != null
@@ -558,8 +673,6 @@ void dispose() {
             // COUNTDOWN OVERLAY
             if (_countdown > 0)
               AnimatedCountdownWidget(countdown: _countdown),
-              
-            // Top toolbar with smile capture toggle
             Positioned(
               left: 0,
               right: 0,
@@ -587,6 +700,11 @@ void dispose() {
                         _buildTopIconButton(
                           _isOldDevice ? Icons.speed : Icons.speed_outlined, 
                           onTap: _togglePerformanceMode
+                        ),
+                        const SizedBox(width: 8),
+                        _buildTopIconButton(
+                          Icons.auto_fix_high, 
+                          onTap: _applyNoiseToLastPhoto
                         ),
                         const SizedBox(width: 16),
                         _buildTopIconButton(
@@ -824,12 +942,16 @@ class MediaPreviewScreen extends StatefulWidget {
 
 class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   VideoPlayerController? _videoPlayerController;
-  bool _isVideo = false;
   late final HarmonizerService _harmonizerService;
 
   @override
   void initState() {
     super.initState();
+    if (_isVideo) {
+      _videoPlayerController = VideoPlayerController.file(File(widget.filePath))
+        ..initialize().then((_) => setState(() {}))
+        ..setLooping(true);
+    }
   _harmonizerService = HarmonizerService();
     _checkFileType();
   }
@@ -837,7 +959,6 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   @override
   void dispose() {
     _videoPlayerController?.dispose();
-  _harmonizerService.dispose();
     super.dispose();
   }
 
