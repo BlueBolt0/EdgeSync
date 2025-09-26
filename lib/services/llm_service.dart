@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class LLMService {
   static const String _groqApiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-  static const String _apiKeyPref = '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';
+  static const String _apiKeyPref = 'groq_api_key';
 
   Future<Map<String, dynamic>> analyzeText(String extractedText) async {
     final prefs = await SharedPreferences.getInstance();
