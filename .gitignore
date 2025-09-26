@@ -33,6 +33,23 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Common ML/AI model and checkpoint files (but allow assets/models/)
+*.ckpt
+*.h5
+*.pth
+*.pt
+*.tflite
+*.pb
+*.onnx
+*.weights
+*.npz
+*.npy
+!assets/models/*.tflite
+!assets/models/*.pb
+!assets/models/*.onnx
+
+# Do not ignore assets/models/ so models can be committed
+
 # Symbolication related
 app.*.symbols
 
