@@ -10,9 +10,9 @@ class LoggingService {
   static const String _tag = 'EdgeSync';
   
   // Metrics tracking
-  Map<String, DateTime> _operationStartTimes = {};
-  Map<String, List<Duration>> _operationDurations = {};
-  Map<String, int> _errorCounts = {};
+  final Map<String, DateTime> _operationStartTimes = {};
+  final Map<String, List<Duration>> _operationDurations = {};
+  final Map<String, int> _errorCounts = {};
 
   void debug(String message, {String? operation}) {
     _log(LogLevel.debug, message, operation: operation);

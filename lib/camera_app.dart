@@ -10,7 +10,6 @@ import 'package:gal/gal.dart';
 import 'package:video_player/video_player.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
-import 'package:flutter/services.dart';
 import 'services/harmonizer_service.dart';
 import 'widgets/harmonizer_dialog.dart';
 import 'screens/harmonizer_settings_screen.dart';
