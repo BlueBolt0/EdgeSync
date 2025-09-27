@@ -95,9 +95,9 @@ class AndroidOptimizedNoiseInjector {
       }
 
       // Validate image dimensions
-      if (image.width <= 0 || image.height <= 0 || image.width > 10000 || image.height > 10000) {
+      if (image.width <= 0 || image.height <= 0) {
         print('❌ Invalid image dimensions: ${image.width}x${image.height}');
-        return null;
+        throw img.ImageException('Invalid image dimensions');
       }
 
       print('📸 Image loaded: ${image.width}x${image.height}');
@@ -181,7 +181,7 @@ class AndroidOptimizedNoiseInjector {
     // Simplified feature extraction to match scaler (3 features)
     final width = image.width.toDouble();
     final height = image.height.toDouble();
-    final aspectRatio = width / height;
+    final aspectRatio = width > 0 && height > 0 ? width / height : 1.0;
 
     // Normalize features to match training data range
     return [
