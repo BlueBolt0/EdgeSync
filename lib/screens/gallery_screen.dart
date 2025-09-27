@@ -64,11 +64,14 @@ class MediaViewer extends StatefulWidget {
   State<MediaViewer> createState() => _MediaViewerState();
 }
 
-class _MediaViewerState extends State<MediaViewer> {
+class _MediaViewerState extends State<MediaViewer> with SingleTickerProviderStateMixin {
   VideoPlayerController? _videoPlayerController;
   bool _isVideo = false;
   final HarmonizerService _harmonizerService = HarmonizerService();
   bool _isProcessing = false;
+  bool _showButtons = false;
+  late AnimationController _animationController;
+  late Animation<double> _animation;
 
   @override
   void initState() {
@@ -82,11 +85,21 @@ class _MediaViewerState extends State<MediaViewer> {
           }
         });
     }
+
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _animation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    );
   }
 
   @override
   void dispose() {
     _videoPlayerController?.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -177,33 +190,51 @@ class _MediaViewerState extends State<MediaViewer> {
   }
 
   Widget _buildImageViewer() {
-    return Stack(
-      children: [
-        Image.file(File(widget.filePath), fit: BoxFit.contain),
-        // Overlay buttons for images
-        Positioned(
-          bottom: 20,
-          left: 20,
-          right: 20,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildActionButton(
-                icon: Icons.smart_toy,
-                label: 'Harmonizer',
-                onTap: _handleHarmonizer,
-                color: Colors.teal,
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _showButtons = !_showButtons;
+          if (_showButtons) {
+            _animationController.forward();
+          } else {
+            _animationController.reverse();
+          }
+        });
+      },
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Image.file(File(widget.filePath), fit: BoxFit.contain),
+          // Animated buttons
+          Positioned(
+            bottom: 30,
+            child: FadeTransition(
+              opacity: _animation,
+              child: ScaleTransition(
+                scale: _animation,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildActionButton(
+                      icon: Icons.auto_awesome,
+                      label: 'Harmonizer',
+                      onTap: _handleHarmonizer,
+                      color: Colors.teal,
+                    ),
+                    const SizedBox(width: 20),
+                    _buildActionButton(
+                      icon: Icons.privacy_tip,
+                      label: 'Privacy',
+                      onTap: _handlePrivacy,
+                      color: Colors.deepPurple,
+                    ),
+                  ],
+                ),
               ),
-              _buildActionButton(
-                icon: Icons.privacy_tip,
-                label: 'Privacy',
-                onTap: _handlePrivacy,
-                color: Colors.deepPurple,
-              ),
-            ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
