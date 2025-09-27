@@ -64,7 +64,8 @@ class MediaViewer extends StatefulWidget {
   State<MediaViewer> createState() => _MediaViewerState();
 }
 
-class _MediaViewerState extends State<MediaViewer> with SingleTickerProviderStateMixin {
+class _MediaViewerState extends State<MediaViewer>
+    with SingleTickerProviderStateMixin {
   VideoPlayerController? _videoPlayerController;
   bool _isVideo = false;
   final HarmonizerService _harmonizerService = HarmonizerService();
@@ -116,9 +117,9 @@ class _MediaViewerState extends State<MediaViewer> with SingleTickerProviderStat
       await _showHarmonizerDialog(widget.filePath);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Harmonizer error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Harmonizer error: $e')));
       }
     } finally {
       if (mounted) {
@@ -140,18 +141,18 @@ class _MediaViewerState extends State<MediaViewer> with SingleTickerProviderStat
 
       if (result != null && result['success'] == true) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Privacy image saved!')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Privacy image saved!')));
         }
       } else {
         throw Exception(result?['error'] ?? 'Unknown error');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Privacy error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Privacy error: $e')));
       }
     } finally {
       if (mounted) {
@@ -176,15 +177,8 @@ class _MediaViewerState extends State<MediaViewer> with SingleTickerProviderStat
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        Center(
-          child: _isVideo
-              ? _buildVideoPlayer()
-              : _buildImageViewer(),
-        ),
-        if (_isProcessing)
-          const Center(
-            child: CircularProgressIndicator(),
-          ),
+        Center(child: _isVideo ? _buildVideoPlayer() : _buildImageViewer()),
+        if (_isProcessing) const Center(child: CircularProgressIndicator()),
       ],
     );
   }
