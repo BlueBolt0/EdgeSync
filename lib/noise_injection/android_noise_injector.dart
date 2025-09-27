@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:io';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
+import 'package:gal/gal.dart';
 import '../ml/tflite_ensemble.dart';
 import 'native_idct_safe.dart';
 
@@ -240,12 +241,21 @@ class AndroidOptimizedNoiseInjector {
     img.Image image,
     String? filename,
   ) async {
+    final tempDir = await getTemporaryDirectory();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final name = filename ?? 'noised_$timestamp';
-    final outputFile = File('${_outputDir!.path}/$name.jpg');
+    final name = filename ?? 'noised_$timestamp.jpg';
+    final outputFile = File('${tempDir.path}/$name');
 
     final jpegBytes = img.encodeJpg(image, quality: 95);
     await outputFile.writeAsBytes(jpegBytes);
+
+    // Save to gallery
+    try {
+      await Gal.putImage(outputFile.path);
+      print('✅ Image saved to gallery: ${outputFile.path}');
+    } catch (e) {
+      print('⚠️  Failed to save image to gallery: $e');
+    }
 
     return outputFile.path;
   }
