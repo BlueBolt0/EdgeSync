@@ -201,7 +201,9 @@ class _MediaViewerState extends State<MediaViewer>
   }
 
   Widget _buildImageViewer() {
-    final isPrivacyImage = path.basename(widget.filePath).startsWith('privacy_');
+    final isPrivacyImage = path
+        .basename(widget.filePath)
+        .startsWith('privacy_');
 
     return GestureDetector(
       onTap: () {

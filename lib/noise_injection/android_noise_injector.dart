@@ -44,18 +44,23 @@ class AndroidOptimizedNoiseInjector {
   /// Setup output directory in app documents
   static Future<void> _setupOutputDirectory() async {
     try {
-      final appDir = await getApplicationDocumentsDirectory();
-      _outputDir = Directory('${appDir.path}/noised_images');
+      // Use temporary directory for broader compatibility
+      _outputDir = await getTemporaryDirectory();
 
-      if (!await _outputDir!.exists()) {
-        await _outputDir!.create(recursive: true);
-      }
-
-      print('📁 Output directory: ${_outputDir!.path}');
+      print('📁 Output directory set to temporary: ${_outputDir!.path}');
     } catch (e) {
       print('⚠️  Failed to setup output directory: $e');
-      // Fallback to temporary directory
-      _outputDir = await getTemporaryDirectory();
+      // Fallback to a directory within the app's documents directory
+      try {
+        final appDir = await getApplicationDocumentsDirectory();
+        _outputDir = Directory('${appDir.path}/noised_images');
+        if (!await _outputDir!.exists()) {
+          await _outputDir!.create(recursive: true);
+        }
+        print('📁 Fallback output directory: ${_outputDir!.path}');
+      } catch (e2) {
+        print('❌ Critical failure: Could not create any output directory: $e2');
+      }
     }
   }
 
