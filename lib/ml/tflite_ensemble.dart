@@ -83,7 +83,7 @@ class TFLiteEnsemblePredictor {
           final input = [scaledFeatures];
           
           // Prepare output
-          final output = [List.filled(7, 0.0)]; // 7 parameters
+          final output = [List.filled(3, 0.0)]; // 3 parameters: amplitude, frequency, blend
           
           // Run inference
           interpreter.run(input, output);
@@ -129,8 +129,8 @@ class TFLiteEnsemblePredictor {
   
   /// Inverse scale output using loaded scaler
   Map<String, double> _inverseScaleOutput(List<double> output, Map<String, dynamic> scaler) {
-    final outputMean = List<double>.from(scaler['output_mean']);
-    final outputScale = List<double>.from(scaler['output_scale']);
+    final outputMean = List<double>.from(scaler['output_mean'] ?? [0.5, 0.3, 0.8]); // Default values
+    final outputScale = List<double>.from(scaler['output_scale'] ?? [0.2, 0.1, 0.1]); // Default values
     
     final unscaled = <double>[];
     for (int i = 0; i < output.length; i++) {
@@ -138,13 +138,13 @@ class TFLiteEnsemblePredictor {
     }
     
     return {
-      'amplitude_factor': unscaled[0],
-      'frequency_factor': unscaled[1], 
-      'phase_factor': unscaled[2],
-      'spatial_factor': unscaled[3],
-      'temporal_factor': unscaled[4],
-      'noise_seed': unscaled[5],
-      'blend_factor': unscaled[6],
+      'amplitude_factor': unscaled[0].clamp(0.1, 1.0),
+      'frequency_factor': unscaled[1].clamp(0.1, 1.0), 
+      'blend_factor': unscaled[2].clamp(0.3, 1.0),
+      'phase_factor': 0.4, // Default values for unused parameters
+      'spatial_factor': 0.6,
+      'temporal_factor': 0.2,
+      'noise_seed': 42.0,
     };
   }
   
