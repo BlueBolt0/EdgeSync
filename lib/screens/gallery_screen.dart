@@ -22,11 +22,20 @@ class GalleryScreen extends StatefulWidget {
 
 class _GalleryScreenState extends State<GalleryScreen> {
   late PageController _pageController;
+  late List<String> _currentMediaPaths;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: widget.initialIndex);
+    _currentMediaPaths = List.from(widget.mediaPaths);
+  }
+
+  void _addMediaPath(String path) {
+    setState(() {
+      _currentMediaPaths.insert(0, path);
+      _pageController.jumpToPage(0);
+    });
   }
 
   @override
@@ -46,9 +55,12 @@ class _GalleryScreenState extends State<GalleryScreen> {
       ),
       body: PageView.builder(
         controller: _pageController,
-        itemCount: widget.mediaPaths.length,
+        itemCount: _currentMediaPaths.length,
         itemBuilder: (context, index) {
-          return MediaViewer(filePath: widget.mediaPaths[index]);
+          return MediaViewer(
+            filePath: _currentMediaPaths[index],
+            onNewMedia: _addMediaPath,
+          );
         },
       ),
     );
@@ -57,8 +69,13 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
 class MediaViewer extends StatefulWidget {
   final String filePath;
+  final Function(String newPath) onNewMedia;
 
-  const MediaViewer({super.key, required this.filePath});
+  const MediaViewer({
+    super.key,
+    required this.filePath,
+    required this.onNewMedia,
+  });
 
   @override
   State<MediaViewer> createState() => _MediaViewerState();
@@ -184,6 +201,8 @@ class _MediaViewerState extends State<MediaViewer>
   }
 
   Widget _buildImageViewer() {
+    final isPrivacyImage = path.basename(widget.filePath).startsWith('privacy_');
+
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -199,6 +218,23 @@ class _MediaViewerState extends State<MediaViewer>
         alignment: Alignment.center,
         children: [
           Image.file(File(widget.filePath), fit: BoxFit.contain),
+          if (isPrivacyImage)
+            Positioned(
+              top: 10,
+              right: 10,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.privacy_tip,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+            ),
           // Animated buttons
           Positioned(
             bottom: 30,
