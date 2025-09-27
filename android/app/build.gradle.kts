@@ -21,7 +21,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.edgesync"
-        minSdk = flutter.minSdkVersion
+        minSdkVersion(26)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
