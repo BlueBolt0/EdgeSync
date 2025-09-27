@@ -208,6 +208,14 @@ class _CameraAppState extends State<CameraApp>
         await _cameraController!.initialize();
         await _cameraController!.setFlashMode(_flashMode);
 
+        // Set auto focus mode if supported
+        try {
+          await _cameraController!.setFocusMode(FocusMode.auto);
+        } on CameraException catch (e) {
+          // Ignore, as this may not be supported on all devices.
+          print("Error setting focus mode: $e");
+        }
+
         setState(() {
           _isInitialized = true;
         });
@@ -565,7 +573,27 @@ class _CameraAppState extends State<CameraApp>
             // Camera preview (fills available space)
             Positioned.fill(
               child: _isInitialized && _cameraController != null
-                  ? CameraPreview(_cameraController!)
+                  ? GestureDetector(
+                      onTapUp: (details) {
+                        if (_cameraController?.value.isInitialized == true) {
+                          final screenSize = MediaQuery.of(context).size;
+                          final x = details.localPosition.dx / screenSize.width;
+                          final y =
+                              details.localPosition.dy / screenSize.height;
+
+                          // Ensure x and y are within bounds [0, 1]
+                          if (x < 0 || x > 1 || y < 0 || y > 1) return;
+
+                          try {
+                            _cameraController!.setFocusPoint(Offset(x, y));
+                            _cameraController!.setFocusMode(FocusMode.auto);
+                          } on CameraException catch (e) {
+                            print("Error setting focus point: $e");
+                          }
+                        }
+                      },
+                      child: CameraPreview(_cameraController!),
+                    )
                   : Container(
                       color: Colors.black,
                       child: const Center(
