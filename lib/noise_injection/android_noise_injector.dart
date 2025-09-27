@@ -35,7 +35,6 @@ class AndroidOptimizedNoiseInjector {
       _initialized = true;
       print('✅ Android Optimized Noise Injector initialized');
       return true;
-
     } catch (e) {
       print('❌ Failed to initialize noise injector: $e');
       return false;
@@ -47,11 +46,11 @@ class AndroidOptimizedNoiseInjector {
     try {
       final appDir = await getApplicationDocumentsDirectory();
       _outputDir = Directory('${appDir.path}/noised_images');
-      
+
       if (!await _outputDir!.exists()) {
         await _outputDir!.create(recursive: true);
       }
-      
+
       print('📁 Output directory: ${_outputDir!.path}');
     } catch (e) {
       print('⚠️  Failed to setup output directory: $e');
@@ -73,7 +72,6 @@ class AndroidOptimizedNoiseInjector {
     double blendFactor = 0.8,
     bool useEnsemble = true,
   }) async {
-    
     if (!_initialized) {
       final initSuccess = await init();
       if (!initSuccess) {
@@ -83,7 +81,7 @@ class AndroidOptimizedNoiseInjector {
     }
 
     final stopwatch = Stopwatch()..start();
-    
+
     try {
       print('🎯 Starting noise injection...');
 
@@ -119,13 +117,18 @@ class AndroidOptimizedNoiseInjector {
       // }
 
       // Apply simple spatial noise injection (simplified for reliability)
-      final noisedImage = _applySimpleNoise(image, amplitudeFactor, noiseSeed ?? 42, blendFactor);
-      
+      final noisedImage = _applySimpleNoise(
+        image,
+        amplitudeFactor,
+        noiseSeed ?? 42,
+        blendFactor,
+      );
+
       // Save to output directory
       final outputPath = await _saveNoisedImage(noisedImage, filename);
-      
+
       stopwatch.stop();
-      
+
       final result = {
         'success': true,
         'output_path': outputPath,
@@ -143,11 +146,12 @@ class AndroidOptimizedNoiseInjector {
         'ensemble_used': predictedParams != null,
       };
 
-      print('✅ Noise injection completed in ${stopwatch.elapsedMilliseconds}ms');
+      print(
+        '✅ Noise injection completed in ${stopwatch.elapsedMilliseconds}ms',
+      );
       print('📁 Output saved to: $outputPath');
-      
-      return result;
 
+      return result;
     } catch (e, stackTrace) {
       stopwatch.stop();
       print('❌ Noise injection failed: $e');
@@ -161,14 +165,16 @@ class AndroidOptimizedNoiseInjector {
   }
 
   /// Predict noise parameters using ensemble
-  static Future<Map<String, double>?> _predictParameters(img.Image image) async {
+  static Future<Map<String, double>?> _predictParameters(
+    img.Image image,
+  ) async {
     try {
       // Extract features from image (simplified)
       final features = _extractImageFeatures(image);
-      
+
       // Use ensemble to predict parameters
       final prediction = await _ensemble.predictParameters(features);
-      
+
       return prediction;
     } catch (e) {
       print('⚠️  Parameter prediction failed: $e');
@@ -185,14 +191,19 @@ class AndroidOptimizedNoiseInjector {
 
     // Normalize features to match training data range
     return [
-      width / 1000.0,        // Normalized width
-      height / 1000.0,       // Normalized height
-      aspectRatio,           // Aspect ratio
+      width / 1000.0, // Normalized width
+      height / 1000.0, // Normalized height
+      aspectRatio, // Aspect ratio
     ];
   }
 
   /// Apply simple spatial noise to image
-  static img.Image _applySimpleNoise(img.Image image, double amplitudeFactor, int noiseSeed, double blendFactor) {
+  static img.Image _applySimpleNoise(
+    img.Image image,
+    double amplitudeFactor,
+    int noiseSeed,
+    double blendFactor,
+  ) {
     final random = math.Random(noiseSeed);
     final result = img.Image.from(image);
 
@@ -201,9 +212,12 @@ class AndroidOptimizedNoiseInjector {
         final pixel = image.getPixel(x, y);
 
         // Add random noise to each color channel
-        final rNoise = ((random.nextDouble() - 0.5) * amplitudeFactor * 50).round();
-        final gNoise = ((random.nextDouble() - 0.5) * amplitudeFactor * 50).round();
-        final bNoise = ((random.nextDouble() - 0.5) * amplitudeFactor * 50).round();
+        final rNoise = ((random.nextDouble() - 0.5) * amplitudeFactor * 50)
+            .round();
+        final gNoise = ((random.nextDouble() - 0.5) * amplitudeFactor * 50)
+            .round();
+        final bNoise = ((random.nextDouble() - 0.5) * amplitudeFactor * 50)
+            .round();
 
         final newR = (pixel.r + rNoise).clamp(0, 255).toInt();
         final newG = (pixel.g + gNoise).clamp(0, 255).toInt();
@@ -215,15 +229,19 @@ class AndroidOptimizedNoiseInjector {
 
     return result;
   }
+
   /// Save noised image to output directory
-  static Future<String> _saveNoisedImage(img.Image image, String? filename) async {
+  static Future<String> _saveNoisedImage(
+    img.Image image,
+    String? filename,
+  ) async {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final name = filename ?? 'noised_$timestamp';
     final outputFile = File('${_outputDir!.path}/$name.jpg');
-    
+
     final jpegBytes = img.encodeJpg(image, quality: 95);
     await outputFile.writeAsBytes(jpegBytes);
-    
+
     return outputFile.path;
   }
 
