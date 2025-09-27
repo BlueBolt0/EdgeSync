@@ -104,19 +104,19 @@ class AndroidOptimizedNoiseInjector {
 
       // Use ensemble prediction if enabled and available
       Map<String, double>? predictedParams;
-      if (useEnsemble) {
-        predictedParams = await _predictParameters(image);
-        if (predictedParams != null) {
-          amplitudeFactor = predictedParams['amplitude_factor'] ?? amplitudeFactor;
-          frequencyFactor = predictedParams['frequency_factor'] ?? frequencyFactor;
-          phaseFactor = predictedParams['phase_factor'] ?? phaseFactor;
-          spatialFactor = predictedParams['spatial_factor'] ?? spatialFactor;
-          temporalFactor = predictedParams['temporal_factor'] ?? temporalFactor;
-          noiseSeed = (predictedParams['noise_seed'] ?? noiseSeed ?? 42).round();
-          blendFactor = predictedParams['blend_factor'] ?? blendFactor;
-          print('🤖 Using ensemble-predicted parameters');
-        }
-      }
+      // if (useEnsemble) {
+      //   predictedParams = await _predictParameters(image);
+      //   if (predictedParams != null) {
+      //     amplitudeFactor = predictedParams['amplitude_factor'] ?? amplitudeFactor;
+      //     frequencyFactor = predictedParams['frequency_factor'] ?? frequencyFactor;
+      //     phaseFactor = predictedParams['phase_factor'] ?? phaseFactor;
+      //     spatialFactor = predictedParams['spatial_factor'] ?? spatialFactor;
+      //     temporalFactor = predictedParams['temporal_factor'] ?? temporalFactor;
+      //     noiseSeed = (predictedParams['noise_seed'] ?? noiseSeed ?? 42).round();
+      //     blendFactor = predictedParams['blend_factor'] ?? blendFactor;
+      //     print('🤖 Using ensemble-predicted parameters');
+      //   }
+      // }
 
       // Apply simple spatial noise injection (simplified for reliability)
       final noisedImage = _applySimpleNoise(image, amplitudeFactor, noiseSeed ?? 42, blendFactor);
