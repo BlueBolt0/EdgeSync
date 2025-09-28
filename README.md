@@ -4,9 +4,9 @@
 
 EdgeSync is a feature-rich, intelligent camera application built with Flutter. It goes beyond standard camera functionality by integrating on-device AI to provide smart features like automatic smile detection, voice-activated controls, and a unique privacy-preserving noise injection system. The application is designed to be performant on a wide range of devices through its adaptive performance-tuning capabilities.
 
-<div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
-  <img src="./assets/demoImg1.jpg" alt="Demo 1" style="width:45%; max-width:320px; height:400px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.3);">
-  <img src="./assets/demoImg2.jpg" alt="Demo 2" style="width:45%; max-width:320px; height:400px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.3);">
+<div style="display:flex; flex-wrap:wrap; align-items:center">
+    <img src="./assets/demoImg1.jpg" alt="Demo 1" style="width:45%; max-width:250px; height:400px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.3); margin-right:24px;">
+    <img src="./assets/demoImg2.jpg" alt="Demo 2" style="width:45%; max-width:250px; height:400px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.3);">
 </div>
 
 ## 2. Technical Features & Implementation
@@ -61,18 +61,18 @@ The application includes a robust system to ensure it runs smoothly on both old 
 ### Installation Steps
 
 1.  **Clone the repository.**
-    ```bash
+    `bash
     git clone https://github.com/BlueBolt0/EdgeSync.git
     cd EdgeSync
-    ```
+    `
 2.  **Install Flutter Dependencies**:
-    ```bash
+    `bash
     flutter pub get
-    ```
+    `
 3.  **Run the App**:
-    ```bash
+    `bash
     flutter run
-    ```
+    `
 4.  **Get and enter groq api key** in the app when asked for it. Get api keys from https://console.groq.com/keys
 
 ## 5. Python Environment Setup (Optional)
@@ -81,9 +81,9 @@ This setup is **only required if you intend to run the Python-based test scripts
 
 1.  **Install Python** (if you haven't already).
 2.  **Install the required packages** using the `requirements.txt` file:
-    ```bash
+    `bash
     pip install -r requirements.txt
-    ```
+    `
 
 ## 6. Project Structure
 
@@ -104,8 +104,8 @@ lib/
 │   └── android_noise_injector.dart # Handles privacy noise injection
 ├──
 └── widgets/
-    ├── harmonizer_dialog.dart
-    └── ui_components.dart      # Reusable UI widgets
+        ├── harmonizer_dialog.dart
+        └── ui_components.dart      # Reusable UI widgets
 ```
 
 ## 7. Submissions
