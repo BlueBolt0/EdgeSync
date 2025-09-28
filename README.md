@@ -4,8 +4,10 @@
 
 EdgeSync is a feature-rich, intelligent camera application built with Flutter. It goes beyond standard camera functionality by integrating on-device AI to provide smart features like automatic smile detection, voice-activated controls, and a unique privacy-preserving noise injection system. The application is designed to be performant on a wide range of devices through its adaptive performance-tuning capabilities.
 
-![Demo Image](./assets/demoImg1.jpg)
-![Demo Image](./assets/demoImg2.jpg)
+<div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+  <img src="./assets/demoImg1.jpg" alt="Demo 1" style="width:45%; max-width:320px; height:auto; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.3);">
+  <img src="./assets/demoImg2.jpg" alt="Demo 2" style="width:45%; max-width:320px; height:auto; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.3);">
+</div>
 
 ## 2. Technical Features & Implementation
 
