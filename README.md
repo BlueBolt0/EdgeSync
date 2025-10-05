@@ -21,10 +21,6 @@ EdgeSync is an innovative Flutter-based camera application that leverages on-dev
 
 The application features privacy mode with AI-driven noise injection, automatic smile capture for hands-free group photos, voice-activated controls, and harmonizer for content-aware assistance. Built with performance in mind, EdgeSync adapts to device capabilities through dynamic benchmarking and resource management.
 
-<div style="display:flex; flex-wrap:wrap; align-items:center">
-    <img src="./assets/demoImg1.jpg" alt="Demo 1" style="width:45%; max-width:250px; height:400px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.3); margin-right:24px;">
-    <img src="./assets/demoImg2.jpg" alt="Demo 2" style="width:45%; max-width:250px; height:400px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.3);">
-</div>
 
 ## Key Features
 
@@ -33,7 +29,10 @@ The application features privacy mode with AI-driven noise injection, automatic 
 - **On-Device Processing**: All transformations occur locally without requiring internet connectivity
 - **Fallback Mechanism**: Graceful degradation to default parameters if model inference fails
 - **Gallery Integration**: Processed images are automatically saved to device gallery
-
+<div align="center">
+    <img src="https://ibb.co/rGBVGg0K" alt="Privacy Mode Demo" style="width:60%; max-width:400px; border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,0.3); margin-top:12px;">
+    <p><em>Figure: Privacy Mode in action — adaptive noise applied to protect sensitive regions.</em></p>
+</div>
 ### Harmonizer Service
 - **Content Analysis**: OCR and entity recognition to extract dates, contacts, and tasks from images
 - **Actionable Suggestions**: Generates calendar events, reminders, and contact additions
