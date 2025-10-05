@@ -10,10 +10,14 @@
 
 ## Submissions
 
-### Demonstration Materials
-- **Video Presentation**: [Insert Video Link Here] - Complete feature walkthrough
-- **PowerPoint Presentation**: [Insert PPT Link Here] - 
-- **Documentation (DOCX)**: [Insert DOCX Link Here] - Detailed technical documentation
+## Submissions
+<div align="center">
+
+| 📹 **Video Presentation** | 🖥️ **Presentation (PPT)** | 📄 **Documentation (PDF)** |
+|---------------------------|---------------------------|-----------------------------|
+| 🔗 [Watch Video](#) <br> _(Complete feature walkthrough)_ | 🔗 [View Presentation](https://drive.google.com/file/d/1JWbJLOHjpNa8zEd3nX-0NDO4i3ViV2vS/view?usp=sharing) | 🔗 [View Documentation](https://drive.google.com/file/d/1zXsFTBFj5fbcHMB5gRNuktbKjTJ8fAmG/view?usp=sharing) |
+
+</div>
 
 ## Overview
 
