@@ -30,7 +30,7 @@ The application features privacy mode with AI-driven noise injection, automatic 
 - **Fallback Mechanism**: Graceful degradation to default parameters if model inference fails
 - **Gallery Integration**: Processed images are automatically saved to device gallery
 <div align="center">
-    <img src="https://i.ibb.co/bg4kgxmj/Picture1.png" alt="Privacy Mode Demo" style="width:60%; max-width:400px; border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,0.3); margin-top:12px;">
+    <img src="./assets/Picture1.png" alt="Privacy Mode Demo" style="width:60%; max-width:400px; border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,0.3); margin-top:12px;">
     <p><em>Figure: Privacy Mode in action — adaptive noise applied to protect sensitive regions.</em></p>
 </div>
 ### Harmonizer Service
