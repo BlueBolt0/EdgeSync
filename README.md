@@ -14,7 +14,7 @@
 
 | 📹 **Video Presentation** | 🖥️ **Presentation (PPT)** | 📄 **Documentation (PDF)** |
 |---------------------------|---------------------------|-----------------------------|
-| 🔗 [Watch Video](#) <br> _(Complete feature walkthrough)_ | 🔗 [View Presentation](https://drive.google.com/file/d/1JWbJLOHjpNa8zEd3nX-0NDO4i3ViV2vS/view?usp=sharing) | 🔗 [View Documentation](https://drive.google.com/file/d/1zXsFTBFj5fbcHMB5gRNuktbKjTJ8fAmG/view?usp=sharing) |
+| 🔗 [Watch Video](https://youtu.be/QyvlbUafpAs) <br> _(Complete feature walkthrough)_ | 🔗 [View Presentation](https://drive.google.com/file/d/1JWbJLOHjpNa8zEd3nX-0NDO4i3ViV2vS/view?usp=sharing) | 🔗 [View Documentation](https://drive.google.com/file/d/1zXsFTBFj5fbcHMB5gRNuktbKjTJ8fAmG/view?usp=sharing) |
 
 </div>
 
