@@ -1,113 +1,173 @@
-# EdgeSync: An Intelligent Camera Application
+# EdgeSync AI: Intelligent Camera Application
 
-## 1. Project Overview
+## Team Details
 
-EdgeSync is a feature-rich, intelligent camera application built with Flutter. It goes beyond standard camera functionality by integrating on-device AI to provide smart features like automatic smile detection, voice-activated controls, and a unique privacy-preserving noise injection system. The application is designed to be performant on a wide range of devices through its adaptive performance-tuning capabilities.
+### Team Name - BlueBlot
+- **Member 1**: Shashank Padanad
+- **Member 2**: Ishan Chitkarsh
+- **Member 3**: Himanshu Ranjan
+- **Member 4**: Prafull Anand
 
-<div style="display:flex; flex-wrap:wrap; align-items:center">
-    <img src="./assets/demoImg1.jpg" alt="Demo 1" style="width:45%; max-width:250px; height:400px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.3); margin-right:24px;">
-    <img src="./assets/demoImg2.jpg" alt="Demo 2" style="width:45%; max-width:250px; height:400px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.3);">
+## Submissions
+
+### Demonstration Materials
+- **Video Presentation**: [Insert Video Link Here] - Complete feature walkthrough
+- **PowerPoint Presentation**: [Insert PPT Link Here] - 
+- **Documentation (DOCX)**: [Insert DOCX Link Here] - Detailed technical documentation
+
+## Overview
+
+EdgeSync is an innovative Flutter-based camera application that leverages on-device AI and machine learning to deliver advanced features beyond standard photography. It combines real-time sensing, privacy-preserving transformations, and natural user interactions to create an intelligent camera experience optimized for modern mobile devices.
+
+The application features privacy mode with AI-driven noise injection, automatic smile capture for hands-free group photos, voice-activated controls, and harmonizer for content-aware assistance. Built with performance in mind, EdgeSync adapts to device capabilities through dynamic benchmarking and resource management.
+
+
+## Key Features
+
+###  Privacy Mode (Noise Injection)
+- **AI-Powered Protection**: Uses TensorFlow Lite models to generate adaptive noise that preserves visual content while reducing automated analysis effectiveness
+- **On-Device Processing**: All transformations occur locally without requiring internet connectivity
+- **Fallback Mechanism**: Graceful degradation to default parameters if model inference fails
+- **Gallery Integration**: Processed images are automatically saved to device gallery
+<div align="center">
+    <img src="./assets/Picture1.png" alt="Privacy Mode Demo" style="width:60%; max-width:400px; border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,0.3); margin-top:12px;">
+    <p><em>Figure: Privacy Mode in action — adaptive noise applied to protect image from model training.</em></p>
 </div>
 
-## 2. Technical Features & Implementation
+### Harmonizer Service
+- **Content Analysis**: OCR and entity recognition to extract dates, contacts, and tasks from images
+- **Actionable Suggestions**: Generates calendar events, reminders, and contact additions
+- **Cloud Assistance**: Optional Groq API integration for enhanced contextual understanding
+- **User Consent**: All actions require explicit confirmation before execution
 
-This section details the advanced, technically-driven features of the EdgeSync application.
+### Smile Capture
+- **Automatic Detection**: Real-time face detection using Google ML Kit to identify smiling faces
+- **Majority Voting**: Triggers capture when majority of visible faces are smiling
+- **Countdown Timer**: 3-second validation period prevents spurious captures
+- **Hands-Free Photography**: Ideal for group photos and self-portraits
 
-### 🔒 Privacy Mode (Noise Injection)
+### Voice Commands
+- **Natural Interaction**: Speech-to-text recognition for hands-free camera control
+- **Supported Commands**: "take picture", "start video", "stop video", "switch camera", "toggle flash", "toggle harmonizer"
+- **Privacy-First**: On-device processing with optional cloud transcription opt-out
+- **Debounced Execution**: Prevents accidental repeated commands
 
-- **Concept**: This mode applies a layer of AI-generated noise to an image, preserving privacy while maintaining the general structure of the photo.
-- **Implementation**: It uses a TFLite model to predict noise parameters for the injection process.
-- **Current Status (Important)**: The TFLite model inference is currently **commented out** in `lib/noise_injection/android_noise_injector.dart`. This is a temporary workaround to prevent a native `SIGSEGV` crash. The system currently falls back to using default noise parameters.
-- **Gallery Integration**: Images processed with Privacy Mode are saved directly to the public device gallery using the `gal` package to ensure they are immediately visible.
 
-### 😊 Smile Capture
 
-- **Automatic Photo Capture**: The app uses on-device face detection (`google_mlkit_face_detection`) to detect smiling faces in the camera's view.
-- **Countdown Timer**: When a majority of detected faces are smiling, a 3-second countdown is automatically triggered, after which a photo is taken. This allows for hands-free group photos without a manual shutter press.
+## Technology Stack
 
-### 🎤 Voice Commands
+### Core Framework
+- **Flutter**: Cross-platform UI framework for iOS and Android
+- **Dart**: Programming language with strong typing and async support
 
-- **Hands-Free Control**: A microphone button enables voice commands to control the camera, using the `speech_to_text` package for on-device recognition.
-- **Functionality**: Users can execute commands like "take picture", "start video", "stop video", and "switch camera".
-- **Implementation**: The voice command service listens for a command and then automatically turns off, preventing continuous listening.
+### AI & ML
+- **TensorFlow Lite**: On-device machine learning for noise injection
+- **Google ML Kit**: Face detection, text recognition, and commons
+- **TFLite Flutter**: Dart bindings for TensorFlow Lite
 
-### 🖼️ Dynamic & Animated Gallery
+### Media & Camera
+- **Camera Plugin**: Native camera access and controls
+- **Video Player**: In-app video playback
+- **Image Processing**: Advanced image manipulation library
+- **GAL**: Gallery access for media saving
 
-- **Dynamic Updates**: The gallery is not just a static view. When a new "privacy" image is generated, it is dynamically added to the gallery's `PageView` for immediate viewing.
-- **Animated UI**: In the gallery, the Harmonizer and Privacy buttons are not always visible. They appear with a smooth fade and scale animation when the user taps on a photo, providing a clean and interactive UI.
+### Utilities
+- **Speech-to-Text**: Voice command recognition
+- **Permission Handler**: Runtime permission management
+- **Shared Preferences**: Local data persistence
+- **URL Launcher**: External app integration (calendar, contacts)
+- **HTTP**: API communication for cloud features
 
-### ✨ Harmonizer Service
-
-- The Harmonizer is a feature designed to process images for aesthetic improvements. When enabled, it presents a dialog after a photo is captured to apply its effects, showcasing post-processing capabilities.
-
-## 3. Performance Optimization
-
-The application includes a robust system to ensure it runs smoothly on both old and new devices.
-
-- **Automatic Detection**: On startup, the app runs a quick benchmark to determine if the device is "old" or "new".
-- **Dynamic Processing Intervals**:
-  - **Old Device Mode**: Uses a longer interval (1500ms) between face detection frames to reduce CPU load and prevent crashes.
-  - **New Device Mode**: Uses a shorter interval (500ms) for more responsive detection.
-- **Manual Toggle**: A "speed" icon in the UI allows the user to manually override the performance mode, with a SnackBar providing clear feedback.
-
-## 4. Setup and Installation
+## Installation & Setup
 
 ### Prerequisites
-
-- Flutter SDK
-- Android Studio or Xcode
-- A physical Android device with a camera
+- Flutter SDK (version 3.9.0 or higher)
+- Android Studio or Xcode (with Android SDK/iOS SDK)
+- Physical Android/iOS device with camera
+- Git for repository cloning
 
 ### Installation Steps
 
-1.  **Clone the repository.**
-    `bash
-    git clone https://github.com/BlueBolt0/EdgeSync.git
-    cd EdgeSync
-    `
-2.  **Install Flutter Dependencies**:
-    `bash
-    flutter pub get
-    `
-3.  **Run the App**:
-    `bash
-    flutter run
-    `
-4.  **Get and enter groq api key** in the app when asked for it. Get api keys from https://console.groq.com/keys
+1. **Clone Repository**
+   ```bash
+   git clone https://github.com/BlueBolt0/EdgeSync.git
+   cd EdgeSync
+   ```
 
-## 5. Python Environment Setup (Optional)
+2. **Project Location**
+   > **Important**: Move the project to a path without spaces (e.g., `C:\dev\EdgeSync`) to avoid Gradle build issues on Windows.
 
-This setup is **only required if you intend to run the Python-based test scripts** for testing and verifying features like the noise injection validation (e.g., `test/ssim_comparison.py`). It is not needed for running the main Flutter application.
+3. **Clean Project**
+   ```bash
+   flutter clean
+   ```
 
-1.  **Install Python** (if you haven't already).
-2.  **Install the required packages** using the `requirements.txt` file:
-    `bash
-    pip install -r requirements.txt
-    `
+4. **Install Dependencies**
+   ```bash
+   flutter pub get
+   ```
 
-## 6. Project Structure
+5. **Configure API Key**
+   - Obtain Groq API key from [https://console.groq.com/keys](https://console.groq.com/keys)
+   - Enter the key when prompted during Harmonizer usage
+
+6. **Run Application**
+   ```bash
+   flutter run
+   ```
+
+### Python Environment (Optional)
+Required only for running test scripts in `test/` directory:
+```bash
+pip install -r requirements.txt
+```
+
+
+## Project Structure
 
 ```
 lib/
-├── main.dart                   # App entry point
-├── camera_app.dart             # Main camera UI and core logic
-├──
-├── screens/
-│   ├── gallery_screen.dart     # Full-screen, swipeable media gallery
+├── main.dart                   # Application entry point
+├── camera_app.dart             # Main camera interface and logic
+├── camera_app2.dart            # Alternative camera implementation
+├── main_new.dart               # Updated entry point
+├── main_old.dart               # Legacy entry point
+├── ml/                         # Machine learning utilities
+├── noise_injection/            # Privacy mode implementation
+├── screens/                    # UI screens
+│   ├── gallery_screen.dart
 │   └── harmonizer_settings_screen.dart
-├──
-├── services/
-│   ├── harmonizer_service.dart # Logic for the harmonizer feature
-│   └── voice_command_service.dart  # Handles voice recognition
-├──
-├── noise_injection/
-│   └── android_noise_injector.dart # Handles privacy noise injection
-├──
-└── widgets/
-        ├── harmonizer_dialog.dart
-        └── ui_components.dart      # Reusable UI widgets
+├── services/                   # Business logic services
+│   ├── harmonizer_service.dart
+│   └── voice_command_service.dart
+├── smile_detection/            # Smile capture functionality
+└── widgets/                    # Reusable UI components
+    ├── harmonizer_dialog.dart
+    └── ui_components.dart
+
+assets/
+├── icons/                      # App icons and assets
+├── models/                     # TFLite model files
+└── demoImg1.jpg, demoImg2.jpg  # Demo images
+
+test/                           # Test suites and validation scripts
+docs/                           # Documentation files
+android/, ios/, windows/, etc.  # Platform-specific code
 ```
 
-## 7. Submissions
 
-- **Video URL**: [Link to Video Demonstration]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+---
