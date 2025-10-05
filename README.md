@@ -31,8 +31,9 @@ The application features privacy mode with AI-driven noise injection, automatic 
 - **Gallery Integration**: Processed images are automatically saved to device gallery
 <div align="center">
     <img src="./assets/Picture1.png" alt="Privacy Mode Demo" style="width:60%; max-width:400px; border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,0.3); margin-top:12px;">
-    <p><em>Figure: Privacy Mode in action — adaptive noise applied to protect sensitive regions.</em></p>
+    <p><em>Figure: Privacy Mode in action — adaptive noise applied to protect image from model training.</em></p>
 </div>
+
 ### Harmonizer Service
 - **Content Analysis**: OCR and entity recognition to extract dates, contacts, and tasks from images
 - **Actionable Suggestions**: Generates calendar events, reminders, and contact additions
