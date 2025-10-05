@@ -8,7 +8,6 @@
 - **Member 3**: Himanshu Ranjan
 - **Member 4**: Prafull Anand
 
-## Submissions
 
 ## Submissions
 <div align="center">
